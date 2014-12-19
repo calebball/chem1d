@@ -108,26 +108,6 @@ MODULE hartree_fock
                 &26 * functions_in_domain(d), & ! LWORK
                 &INFO                         ) ! INFO
 
-!           CALL DSYEVR('N',                  & ! JOBZ
-!               &'A',                         & ! RANGE
-!               &'U',                         & ! UPLO
-!               &functions_in_domain(d),      & ! N
-!               &one_e_in_domain(d)%overlap,  & ! A
-!               &functions_in_domain(d),      & ! LDA
-!               &0.d0, 0.d0,                  & ! VL, VU
-!               &0, 0,                        & ! IL, IU
-!               &0,                           & ! ABSTOL
-!               &M,                           & ! M
-!               &hf_one_e(d)%s_evals,         & ! W
-!               &hf_one_e(d)%u_matrix,        & ! Z
-!               &functions_in_domain(d),      & ! LDZ
-!               &hf_work(d)%ISUPPZ,           & ! ISUPPZ
-!               &hf_work(d)%WORK,             & ! WORK
-!               &26 * functions_in_domain(d), & ! LWORK
-!               &hf_work(d)%IWORK,            & ! IWORK
-!               &10 * functions_in_domain(d), & ! LIWORK
-!               &INFO                         ) ! INFO
-
             ! Choose how many functions to keep
             IF (primary_basis_th.GT.0.AND.&
                &secondary_basis_th.GT.primary_basis_th) THEN
@@ -151,12 +131,6 @@ MODULE hartree_fock
                 ENDDO
 
             ENDIF
-
-!do i = 1, functions_in_domain(d)
-!if (i.EQ.throw_count) write (*,"(20('-'), a, 20('-'))") " keep the following "
-!write (*,"(F30.20, E30.20)") hf_one_e(d)%s_evals(i), hf_one_e(d)%s_evals(i)
-!enddo
-!write (*,*)
 
             ! DSYEVR destroys the overlap matrix, so we have to repair it
             FORALL (i=1:functions_in_domain(d), j=1:functions_in_domain(d))
@@ -236,6 +210,15 @@ MODULE hartree_fock
 !               &1.d0, hf_one_e(d)%x_matrix, functions_in_domain(d), &
 !               &hf_work(d)%matrix(:,:,1), functions_in_domain(d), 0.d0, &
 !               &hf_in_domain(d)%orbitals, functions_in_domain(d))
+
+!write (*,*) "OVERLAP", d
+!do i = 1, functions_in_domain(d)
+!do j = 1, functions_in_domain(d)
+!    write (*,"(F10.5)",advance='no') one_e_in_domain(d)%overlap(i,j)
+!enddo
+!write (*,*)
+!enddo
+!write (*,*)
 
 !write (*,*) "KINETIC", d
 !do i = 1, functions_in_domain(d)

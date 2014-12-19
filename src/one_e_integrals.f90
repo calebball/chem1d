@@ -45,16 +45,24 @@ MODULE one_e_integrals
 
         IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
 
-            FORALL(i = 1:functions_in_domain(domain), j = 1:functions_in_domain(domain))
-                integrals(i,j) = (dble(2 * i * j)    / &
-                               &  dble(i**2 + j**2)  )**3
+            ! We compute these integrals from an easy to evaluate
+            ! analytic expression
+            FORALL(i = 1:functions_in_domain(domain), &
+                  &j = 1:functions_in_domain(domain))
+                integrals(i,j) = (dble(2 * i * j) / dble(i**2 + j**2))**3
             END FORALL
 
         ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
+            ! NOTE : A better way to do this would be to build an
+            !        identity matrix and then use recur from the
+            !        diagonal to build the rest
 
             n_evens = evens_in_domain(domain)
             n_odds  = odds_in_domain(domain)
 
+            ! The analytic expressions for these integrals are in
+            ! terms of ratios of gamma functions.
+            ! We're going to compute them recursively.
             IF (functions_in_domain(domain).GT.0) integrals(1,1) = 1.d0
             IF (n_odds.GT.0) integrals(n_evens+1,n_evens+1) = 1.d0
 
@@ -253,6 +261,7 @@ MODULE one_e_integrals
 
         INTEGER  :: i, j, k, X, Z
         INTEGER  :: n_exps, n_evens, n_odds
+        INTEGER  :: dom_nuc, other_nuc, s
         REAL(dp) :: A, R, arg, F0, F1, F2, c1, c2
         CHARACTER(LEN=58) :: error_message
 
@@ -270,49 +279,34 @@ MODULE one_e_integrals
 
             ELSE
 
-                ! Find the interaction with the outermost nuclei
                 IF (domain.EQ.1) THEN
-                    Z = nuclear_charge(1)
-                    FORALL (i=1:n_exps, j=1:n_exps, i.LE.j)
-                        integrals(i,j) = Z * alpha * dble(i**2 + j**2) / 2.d0
-                    END FORALL
-
-                    Z = nuclear_charge(n_nuclei)
-                    R = nuclear_position(n_nuclei) - nuclear_position(1) 
-                    DO i = 1, n_exps
-                    DO j = 1, n_exps
-                        integrals(i,j) = integrals(i,j) + &
-                            & Z * R**2 * (alpha * dble(i**2 + j**2))**3 * &
-                            & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
-                    ENDDO
-                    ENDDO
-
+                    dom_nuc = 1
+                    other_nuc = n_nuclei
                 ELSE
-                    Z = nuclear_charge(n_nuclei)
-                    FORALL (i=1:n_exps, j=1:n_exps, i.LE.j)
-                        integrals(i,j) = Z * alpha * dble(i**2 + j**2) / 2.d0
-                    END FORALL
+                    dom_nuc = 1
+                    other_nuc = n_nuclei
+                ENDIF
 
-                    Z = nuclear_charge(1)
-                    R = nuclear_position(n_nuclei) - nuclear_position(1) 
-            DO i = 1, n_exps
-            DO j = 1, n_exps
-                        integrals(i,j) = integrals(i,j) + &
-                            & Z * R**2 * (alpha * dble(i**2 + j**2))**3 * &
-                            & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
-                    ENDDO
-                    ENDDO
+                ! Find the interaction with the outermost nuclei
+                Z = nuclear_charge(dom_nuc)
+                FORALL (i=1:n_exps, j=1:n_exps)
+                    integrals(i,j) = Z * alpha * dble(i**2 + j**2) / 2.d0
+                END FORALL
 
-                END IF
+                Z = nuclear_charge(other_nuc)
+                R = nuclear_position(n_nuclei) - nuclear_position(1) 
+                DO i = 1, n_exps
+                DO j = 1, n_exps
+                    integrals(i,j) = integrals(i,j) + &
+                        & Z * R**2 * (alpha * dble(i**2 + j**2))**3 * &
+                        & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
+                ENDDO
+                ENDDO
 
                 ! Find the interaction with the interior nuclei
                 DO X = 2, n_nuclei - 1
-                    IF (domain.EQ.1) THEN
-                        R = nuclear_position(X) - nuclear_position(1) 
-                    ELSE
-                        R = nuclear_position(n_nuclei) - nuclear_position(X) 
-                    ENDIF
                     Z = nuclear_charge(X)
+                    R = nuclear_position(X) - nuclear_position(dom_nuc)
 
                     DO i = 1, n_exps
                     DO j = 1, n_exps
@@ -321,22 +315,16 @@ MODULE one_e_integrals
                             & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
                     ENDDO
                     ENDDO
-
                 END DO
 
-                ! Multiply by the overlap and mirror the matrix
-                FORALL (i=1:n_exps, j=1:n_exps, i.LE.j)
+                ! Multiply by the overlap
+                FORALL (i=1:n_exps, j=1:n_exps)
                     integrals(i,j) = overlap(i,j) * integrals(i,j)
-                END FORALL
-                FORALL (i=1:n_exps, j=1:n_exps, i.GT.j)
-                    integrals(i,j) = integrals(j,i)
                 END FORALL
 
             ENDIF
 
         ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
-            ! NOTE : There must be a way to condense the split
-            ! left/right loops...
 
             n_evens = evens_in_domain(domain)
             n_odds  = odds_in_domain(domain)
@@ -368,10 +356,16 @@ MODULE one_e_integrals
                                 & dble(A * sqrt(4.d0 * i + 3.d0))
             END FORALL
 
-            ! Nuclei to the left of the domain
-            DO X = 1, domain - 2
-                R = nuclear_position(domain - 1) - &
-                  & nuclear_position(X) + A
+            ! Other nuclei
+            DO X = 1, n_nuclei
+                IF (X.EQ.(domain - 1).OR.X.EQ.domain) CYCLE
+                IF (X.GT.domain) THEN
+                    R = nuclear_position(X) - nuclear_position(domain) + A
+                    s = 1
+                ELSE
+                    R = nuclear_position(domain-1) - nuclear_position(X) + A
+                    s = -1
+                ENDIF
                 Z = nuclear_charge(X)
                 arg = dble(A)**2 / dble(R)**2
 
@@ -442,144 +436,27 @@ MODULE one_e_integrals
                 F2 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 2.5d0, &
                    & arg) / R
                 integrals(n_evens,n_evens+n_odds) = &
-                        & integrals(n_evens,n_evens+n_odds) - &
-                        & Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds,n_evens) = &
-                        & integrals(n_evens+n_odds,n_evens) - &
-                        & Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens - 1,n_evens+n_odds) = &
-                        & integrals(n_evens - 1,n_evens+n_odds) - &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
-                integrals(n_evens,n_evens+n_odds - 1) = &
-                        & integrals(n_evens,n_evens+n_odds - 1) - &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds - 1,n_evens) = &
-                        & integrals(n_evens+n_odds - 1,n_evens) - &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds,n_evens - 1) = &
-                        & integrals(n_evens+n_odds,n_evens - 1) - &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
-
-                ! Recur backwards to find the rest
-                DO k = n_evens + n_odds - 2, 2, -1
-                    c1 = dble(5 + 2 * k * (1.d0 - 2 * arg) - 7 * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 7) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
-
-                    FORALL (i=1:n_evens, j=1:n_odds, (i + j).EQ.k)
-                        integrals(i,n_evens+j) = integrals(i,n_evens+j) - &
-                            & Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
-                        integrals(n_evens+j,i) = integrals(n_evens+j,i) - &
-                            & Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
-                    END FORALL
-
-                    F2 = F1
-                    F1 = F0
-                ENDDO
-            ENDDO
-
-            ! Nuclei to the right of the domain
-            DO X = domain + 1, n_nuclei
-                R = nuclear_position(X) - &
-                  & nuclear_position(domain) + A
-                Z = nuclear_charge(X)
-                arg = dble(A)**2 / dble(R)**2
-
-                ! EVENS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 0.5d0, 2 * n_evens + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens,n_evens) = &
-                                       & integrals(n_evens,n_evens) + Z * F2
-
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 0.5d0, 2 * n_evens + 0.5d0, &
-                   & arg) / R
-                integrals(n_evens - 1,n_evens) = &
-                                    & integrals(n_evens - 1,n_evens) + Z * F1
-                integrals(n_evens,n_evens - 1) = &
-                                    & integrals(n_evens,n_evens - 1) + Z * F1
-
-                ! Recur backwards to find the rest
-                DO k = 2 * n_evens - 2, 2, -1
-                    c1 = dble(3 + 2 * k * (1.d0 - 2 * arg) - 5 * arg) / &
-                       & dble((2 * k + 3) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
-
-                    FORALL (i=1:n_evens, j=1:n_evens, (i + j).EQ.k)
-                        integrals(i,j) = integrals(i,j) + Z * F0
-                    END FORALL
-
-                    F2 = F1
-                    F1 = F0
-                ENDDO
-
-                ! ODDS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 1.5d0, 2 * n_odds + 2.5d0, &
-                   & arg) / R
-                integrals(n_evens+n_odds,n_evens+n_odds) = &
-                            & integrals(n_evens+n_odds,n_evens+n_odds) + Z * F2
-
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 1.5d0, 2 * n_odds + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens+n_odds - 1,n_evens+n_odds) = &
-                        & integrals(n_evens+n_odds - 1,n_evens+n_odds) + Z * F1
-                integrals(n_evens+n_odds,n_evens+n_odds - 1) = &
-                        & integrals(n_evens+n_odds,n_evens+n_odds - 1) + Z * F1
-
-                ! Recur backwards to find the rest
-                DO k = 2 * n_odds - 2, 2, -1
-                    c1 = dble(5 + 2 * k * (1.d0 - 2 * arg) - 7 * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 7) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
-
-                    FORALL (i=1:n_odds, j=1:n_odds, (i + j).EQ.k)
-                        integrals(n_evens+i,n_evens+j) = &
-                                    & integrals(n_evens+i,n_evens+j) + Z * F0
-                    END FORALL
-
-                    F2 = F1
-                    F1 = F0
-                ENDDO
-
-                ! EVEN/ODDS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 2.5d0, &
-                   & arg) / R
-                integrals(n_evens,n_evens+n_odds) = &
                         & integrals(n_evens,n_evens+n_odds) + &
-                        & Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
+                        & s * Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
                 integrals(n_evens+n_odds,n_evens) = &
                         & integrals(n_evens+n_odds,n_evens) + &
-                        & Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
+                        & s * Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
 
                 ! Next to the bottom right corner
                 F1 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 1.5d0, &
                    & arg) / R
                 integrals(n_evens - 1,n_evens+n_odds) = &
                         & integrals(n_evens - 1,n_evens+n_odds) + &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
+                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
                 integrals(n_evens,n_evens+n_odds - 1) = &
                         & integrals(n_evens,n_evens+n_odds - 1) + &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
+                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
                 integrals(n_evens+n_odds - 1,n_evens) = &
                         & integrals(n_evens+n_odds - 1,n_evens) + &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
+                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
                 integrals(n_evens+n_odds,n_evens - 1) = &
                         & integrals(n_evens+n_odds,n_evens - 1) + &
-                        & Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
+                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
 
                 ! Recur backwards to find the rest
                 DO k = n_evens + n_odds - 2, 2, -1
@@ -591,9 +468,9 @@ MODULE one_e_integrals
 
                     FORALL (i=1:n_evens, j=1:n_odds, (i + j).EQ.k)
                         integrals(i,n_evens+j) = integrals(i,n_evens+j) + &
-                            & Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
+                            & s * Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
                         integrals(n_evens+j,i) = integrals(n_evens+j,i) + &
-                            & Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
+                            & s * Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
                     END FORALL
 
                     F2 = F1
