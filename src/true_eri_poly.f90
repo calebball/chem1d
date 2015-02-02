@@ -132,14 +132,6 @@ MODULE true_eri_poly
         ! Construct EEEE prototype integrals
         CALL compute_eeee_mn_integrals(A, B, R, max_m + 1, scratch)
 
-!do m = -1, max_m + 1
-!do n = -1, max_m + 1
-!    write (*,"(F10.5)",advance='no') scratch(m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
         IF (integral_check) THEN
             DO m = 1, e1
             DO n = 1, e1
@@ -166,24 +158,6 @@ MODULE true_eri_poly
             eri_EEEE_two(l, s, m, n) = ov_EE_one(m,n) * ov_EE_two(l,s) * &
                 & scratch(m + n, l + s)
         END FORALL
-
-!write (*,*) "EEEE Integrals ============"
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
 
         ! Pack the EEOO type integrals
 
@@ -238,24 +212,6 @@ MODULE true_eri_poly
                 &  dble(2 + 2 * (m + n)) * scratch(m + n + 1, l + s))
             eri_EEOO_two(l, s, m, n) = eri_OOEE_one(m, n, l, s)
         END FORALL
-
-!write (*,*) "EEOO Integrals ============"
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
 
         IF (integral_check) THEN
             DO m = 1, o1
@@ -334,24 +290,6 @@ MODULE true_eri_poly
             ENDDO
         ENDIF
 
-!write (*,*) "OOOO Integrals ============"
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
         ! Pack the EOEO type integrals
         frac = - 4.d0 * B / A
         FORALL (m = 1:e1, n = 1:o1, l = 1:e2, s = 1:o2)
@@ -379,38 +317,13 @@ MODULE true_eri_poly
             eri_OEOE_two(s, l, n, m) = eri_EOEO_two(l, s, m, n)
         END FORALL
 
-!write (*,*) "EOEO Integrals ============"
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-forall (m=-1:max_m+1, n=-1:max_m+1)
-    scratch(m,n) = 0.d0
-end forall
-
         ! Construct EEEO prototype integrals
-        CALL compute_eeeo_mn_integrals(A, B, R, max_m + 1, scratch)
 
-!do m = -1, max_m + 1
-!do n = -1, max_m + 1
-!    write (*,"(F10.5)",advance='no') scratch(m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
+        FORALL (m=-1:max_m+1, n=-1:max_m+1)
+            scratch(m,n) = 0.d0
+        END FORALL
+
+        CALL compute_eeeo_mn_integrals(A, B, R, max_m + 1, scratch)
 
         ! Pack the EEEO type integrals
 
@@ -490,34 +403,8 @@ end forall
             eri_OOOE_one(m, n, s, l) = eri_EOOO_two(l, s, m, n)
         END FORALL
 
-!write (*,*) "EEEO Integrals p1 ========="
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
         ! Construct EEEO prototype integrals
         CALL compute_eeeo_mn_integrals(B, A, R, max_m + 1, scratch)
-
-!do m = -1, max_m + 1
-!do n = -1, max_m + 1
-!    write (*,"(F10.5)",advance='no') scratch(m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
 
         ! Pack the EEEO type integrals
 
@@ -596,24 +483,6 @@ end forall
             eri_OOEO_two(l, s, m, n) = eri_EOOO_one(m, n, l, s)
             eri_OOOE_two(l, s, n, m) = eri_EOOO_one(m, n, l, s)
         END FORALL
-
-!write (*,*) "EEEO Integrals p2 ========="
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_one_two(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do m = 1, 4
-!do n = 1, 4
-!    write (*,"(F10.5)",advance='no') eri_two_one(pm,pn,m,n)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
 
 
     END SUBROUTINE true_eeee

@@ -40,7 +40,6 @@ MODULE storage
     TYPE(hf_properties),  TARGET, ALLOCATABLE :: hf_in_domain(:)
     TYPE(eri_storage), ALLOCATABLE :: eri_of_domain(:)
     TYPE(eri_storage), ALLOCATABLE :: mo_eri_domain(:)
-    REAL(dp), TARGET, ALLOCATABLE :: double_bar(:,:,:,:)
     REAL(dp), ALLOCATABLE :: mo_double_bar(:,:,:,:)
 
 
@@ -63,7 +62,8 @@ MODULE storage
 
         INTEGER, INTENT(OUT) :: exit_state
 
-        INTEGER :: d, d_two, functions, stat
+        INTEGER :: d, d_two, stat
+        INTEGER :: functions, pvec_length
         CHARACTER(LEN=58) :: error_message
         INTEGER, POINTER :: m, m_two
 
@@ -137,17 +137,16 @@ MODULE storage
 
         ENDDO
 
-        ALLOCATE(double_bar(functions,functions,functions,functions),    &
-                &mo_double_bar(functions,functions,functions,functions), &
-                &STAT=stat)
+!       ALLOCATE(mo_double_bar(functions,functions,functions,functions), &
+!               &STAT=stat)
 
-        IF (stat.NE.0) THEN
-            WRITE (error_message,'(a)') &
-                & "Double bar integral storage not allocated"
-            CALL print_error("init_storage", error_message)
-            exit_state = 2
-            RETURN
-        ENDIF
+!       IF (stat.NE.0) THEN
+!           WRITE (error_message,'(a)') &
+!               & "Double bar integral storage not allocated"
+!           CALL print_error("init_storage", error_message)
+!           exit_state = 2
+!           RETURN
+!       ENDIF
 
     END SUBROUTINE
 
@@ -160,7 +159,7 @@ MODULE storage
 
         INTEGER :: d
 
-        ! WARNING : Does this procedure need error checks?
+        ! NOTE : Does this procedure need error checks?
         DO d = 1, n_domains
             CALL overlap_int_in_domain(d, one_e_in_domain(d)%overlap)
             CALL kinetic_int_in_domain(d, one_e_in_domain(d)%kinetic)
@@ -220,8 +219,7 @@ MODULE storage
                   &hf_in_domain,    &
                   &eri_of_domain,   &
                   &mo_eri_domain,   &
-                  &double_bar,      &
-                  &mo_double_bar,   &
+!                 &mo_double_bar,   &
                   &STAT=stat)
 
         IF (stat.NE.0) THEN

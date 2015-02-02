@@ -82,16 +82,16 @@ MODULE true_eri_exp
                     ENDIF
 
                     ! Compute integral value
-                    ! Not sure how to get rid of this horrible IF block
-                    ! The eta == zeta condition will trigger rarely
-                    ! when (m,n) != (l,s)
+                    ! NOTE : Not sure how to get rid of this horrible
+                    ! IF block. The eta == zeta condition will trigger
+                    ! rarely when (m,n) != (l,s)
                     IF (eta.NE.zeta) THEN
+
                         integral = overlap_ll(m,n) * overlap_rr(l,s) * &
-                            & ((alpha * zeta * eta) / &
-                            &  (2.d0 * dble(zeta - eta)**5)) * &
-                            & ((zeta**2 - eta**2) * &
-                            &  (zeta**2 - 8.d0 * zeta * eta + eta**2) + &
-                            &  12.d0 * zeta**2 * eta**2 * log(dble(zeta) / dble(eta)))
+            & ((alpha * zeta * eta) / (2.d0 * dble(zeta - eta)**5)) * &
+            & ((zeta**2 - eta**2) * (zeta**2 - 8.d0 * zeta * eta + eta**2) + &
+            &  12.d0 * zeta**2 * eta**2 * log(dble(zeta) / dble(eta)))
+
                     ELSE
                         integral = overlap_ll(m,n) * overlap_rr(l,s) * &
                             & alpha * zeta / 5.d0
@@ -123,11 +123,6 @@ MODULE true_eri_exp
             max_m = max(func_l, func_r)
 
             ! Start by computing incomplete gamma functions
-!           FORALL (m = 1:max_m, n = 1:max_m)
-!               scratch(m,n) = dble(m**2 + n**2)**2 * &
-!                   & exp_incomplete_gamma(0, R * alpha * dble(m**2 + n**2))
-!           END FORALL
-
             DO m = 1, max_m
             DO n = 1, max_m
                 scratch(m,n) = dble(m**2 + n**2)**2 * &

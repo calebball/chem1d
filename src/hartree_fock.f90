@@ -11,7 +11,7 @@ MODULE hartree_fock
     USE error
     USE storage,         ONLY : one_e_in_domain,      &
                               & hf_in_domain,         &
-                              & double_bar
+                              & eri_of_domain
     USE one_e_integrals, ONLY : overlap_int_in_domain
 
     IMPLICIT NONE
@@ -47,6 +47,7 @@ MODULE hartree_fock
 
     TYPE(hf_one_electron_block), ALLOCATABLE, TARGET :: hf_one_e(:)
     TYPE(hf_two_electron_block), ALLOCATABLE :: hf_two_e(:)
+    REAL(dp), ALLOCATABLE :: hf_Pvec(:), hf_Gvec(:), hf_Imat(:,:)
     TYPE(hf_diis_block), ALLOCATABLE :: hf_diis(:)
     TYPE(hf_work_block), ALLOCATABLE :: hf_work(:)
 
@@ -239,6 +240,8 @@ MODULE hartree_fock
 !write (*,*)
 
         ENDDO
+
+        CALL build_integral_matrix
 
 if (.NOT.scan_job) then
 write (*,*) "functions kept"
@@ -655,28 +658,111 @@ endif
         IMPLICIT NONE
 
         INTEGER, INTENT(IN) :: d
+
+        INTEGER :: i, pvec_pos
         REAL(dp), POINTER :: occupied_orbitals(:,:)
 
-        IF (functions_in_domain(d).NE.0) THEN
-            occupied_orbitals => &
-                &hf_in_domain(d)%orbitals(:,1:electrons_in_domain(d))
+        IF (functions_in_domain(d).EQ.0) RETURN
 
-            CALL DGEMM('N',               & ! TRANSA
-                &'T',                     & ! TRANSB
-                &functions_in_domain(d),  & ! M
-                &functions_in_domain(d),  & ! N
-                &electrons_in_domain(d),  & ! K
-                &1.d0,                    & ! ALPHA
-                &occupied_orbitals,       & ! A
-                &functions_in_domain(d),  & ! LDA
-                &occupied_orbitals,       & ! B
-                &functions_in_domain(d),  & ! LDB
-                &0.d0,                    & ! BETA
-                &hf_in_domain(d)%density, & ! C
-                &functions_in_domain(d)   ) ! LDC
-        ENDIF
+        ! Find where we should be writing in the density vector
+        pvec_pos = 1
+        DO i = 1, d - 1
+            pvec_pos = pvec_pos + functions_in_domain(i)**2
+        ENDDO
+
+        occupied_orbitals => &
+            &hf_in_domain(d)%orbitals(:,1:electrons_in_domain(d))
+
+        CALL DGEMM('N',               & ! TRANSA
+            &'T',                     & ! TRANSB
+            &functions_in_domain(d),  & ! M
+            &functions_in_domain(d),  & ! N
+            &electrons_in_domain(d),  & ! K
+            &1.d0,                    & ! ALPHA
+            &occupied_orbitals,       & ! A
+            &functions_in_domain(d),  & ! LDA
+            &occupied_orbitals,       & ! B
+            &functions_in_domain(d),  & ! LDB
+            &0.d0,                    & ! BETA
+            &hf_in_domain(d)%density, & ! C
+            &functions_in_domain(d)   ) ! LDC
+
+        DO i = 1, functions_in_domain(d)
+            hf_Pvec(pvec_pos:pvec_pos+functions_in_domain(d)) = &
+                &hf_in_domain(d)%density(:,i)
+            pvec_pos = pvec_pos + functions_in_domain(d)
+        ENDDO
 
     END SUBROUTINE build_density_matrix
+
+    SUBROUTINE build_integral_matrix
+        !
+        ! Organises the two-electron integrals into a matrix
+        ! This matrix is easily contracted with the density
+        ! vector into the G matrix
+        !
+        IMPLICIT NONE
+
+        INTEGER :: d, d1, d2
+        INTEGER :: offset1, offset2
+        INTEGER :: i, j, m, n, l, s
+
+        ! Pick domain
+        DO d1 = 1, n_domains
+            IF (electrons_in_domain(d1).EQ.0) CYCLE
+
+            ! Find where d1 starts in the list of bf pairs
+            offset1 = 1
+            DO d = 1, d1 - 1
+                offset1 = offset1 + functions_in_domain(d)**2
+            ENDDO
+
+            ! Pack the integrals between two electrons in d1
+            DO m = 1, functions_in_domain(d1)
+            DO n = 1, functions_in_domain(d1)
+                i = offset1 + (m-1) + functions_in_domain(d1) * (n-1)
+
+                DO l = 1, functions_in_domain(d1)
+                DO s = 1, functions_in_domain(d1)
+                    j = offset1 + (l-1) + functions_in_domain(d1) * (s-1)
+
+                    hf_Imat(i,j) = eri_of_domain(d1)%with(d1)%integral(m,n,l,s) - &
+                        & eri_of_domain(d1)%with(d1)%integral(m,s,n,l)
+                ENDDO
+                ENDDO
+            ENDDO
+            ENDDO
+
+            ! Pick second domain
+            DO d2 = d1 + 1, n_domains
+                IF (electrons_in_domain(d2).EQ.0) CYCLE
+
+                ! Find where d2 starts in the list of bf pairs
+                offset2 = 1
+                DO d = 1, d2 - 1
+                    offset2 = offset2 + functions_in_domain(d)**2
+                ENDDO
+
+                ! Pack the integrals between an electron in d1 and d2
+                DO m = 1, functions_in_domain(d1)
+                DO n = 1, functions_in_domain(d1)
+                    i = offset1 + (m-1) + functions_in_domain(d1) * (n-1)
+
+                    DO l = 1, functions_in_domain(d2)
+                    DO s = 1, functions_in_domain(d2)
+                        j = offset2 + (l-1) + functions_in_domain(d2) * (s-1)
+
+                        hf_Imat(i,j) = eri_of_domain(d1)%with(d2)%integral(m,n,l,s)
+                        hf_Imat(j,i) = hf_Imat(i,j)
+                    ENDDO
+                    ENDDO
+                ENDDO
+                ENDDO
+
+            ENDDO
+        ENDDO
+
+    END SUBROUTINE build_integral_matrix
 
     SUBROUTINE build_g_matrix
         !
@@ -685,54 +771,34 @@ endif
         ! Referred to as the G matrix in Szabo & Ostlund
         !
 
-        INTEGER :: d, int_d, mu, nu, i, j
+        INTEGER :: d, m, n, i, j
         INTEGER, POINTER :: length
+integer :: vec_length, offset
+
+        vec_length = 0
+        DO d = 1, n_domains
+            vec_length = vec_length + functions_in_domain(d)**2
+        ENDDO
+
+        CALL DGEMV('N', vec_length, vec_length, 1.d0, hf_Imat, vec_length, hf_Pvec, 1, 0.d0, hf_Gvec, 1)
 
         DO d = 1, n_domains
-            FORALL (mu = 1:functions_in_domain(d), &
-                   &nu = 1:functions_in_domain(d))
-                hf_two_e(d)%g(mu,nu) = 0.d0
-            END FORALL
-            IF (electrons_in_domain(d).LE.0) CYCLE
+            IF (electrons_in_domain(d).EQ.0) CYCLE
 
-            ! int_d is short for interacting_domain
-            DO int_d = 1, n_domains
-                IF (electrons_in_domain(int_d).LE.0) CYCLE
-                length => functions_in_domain(int_d)
+            ! Find where d starts in the list of bf pairs
+            offset = 1
+            DO i = 1, d - 1
+                offset = offset + functions_in_domain(i)**2
+            ENDDO
 
-                DO mu = 1, functions_in_domain(d)
-                    DO nu = 1, functions_in_domain(d)
+            DO m = 1, functions_in_domain(d)
+                DO n = 1, functions_in_domain(d)
 
-                        CALL DSYMM('L', 'U', length, length, 1.d0, &
-                            & hf_in_domain(int_d)%density, length, &
-                            & double_bar(start_of_domain(d) + mu - 1, &
-                                        &start_of_domain(int_d):end_of_domain(int_d), &
-                                        &start_of_domain(d) + nu - 1, &
-                                        &start_of_domain(int_d):end_of_domain(int_d)), &
-                            & length, 0.d0, hf_work(int_d)%matrix(:,:,1), length)
+                    i = offset + (m-1) + functions_in_domain(d) * (n-1)
 
-                        DO i = 1, length
-                            hf_two_e(d)%g(mu,nu) = hf_two_e(d)%g(mu,nu) + &
-                                &hf_work(int_d)%matrix(i,i,1)
-                        ENDDO
+                    hf_two_e(d)%g(m,n) = hf_Gvec(i)
 
-                    ENDDO
                 ENDDO
-
-!mu = 7
-!nu = 1
-!write (*,*) "DOMAIN ", d, " with ", int_d
-!do i = 1, functions_in_domain(int_d)
-!do j = 1, functions_in_domain(int_d)
-!write (*,"(F10.6)",advance='no') double_bar(start_of_domain(d) + mu - 1, &
-!    &start_of_domain(int_d) + i - 1, &
-!    &start_of_domain(d) + nu - 1, &
-!    &start_of_domain(int_d) + j - 1)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
             ENDDO
 
         ENDDO
@@ -989,6 +1055,7 @@ endif
         INTEGER, INTENT(OUT) :: exit_state
 
         INTEGER :: d, i, j, stat
+        INTEGER :: pvec_length
         INTEGER, POINTER :: m
         CHARACTER(LEN=58) :: error_message
 
@@ -1006,8 +1073,10 @@ endif
             RETURN
         ENDIF
 
+        pvec_length = 0
         DO d = 1, n_domains
             m => functions_in_domain(d)
+            pvec_length = pvec_length + m**2
 
             ! Allocate memory for one electron objects
             ALLOCATE ( hf_one_e(d)%s_evals(m),      &
@@ -1053,7 +1122,14 @@ endif
                 hf_in_domain(d)%orbitals(i,j) = 0.d0
             END FORALL
 
-            ! Construct initial density
+        ENDDO
+
+        ! Allocate memory for the density vector
+        ALLOCATE(hf_Pvec(pvec_length), hf_Gvec(pvec_length), &
+            &hf_Imat(pvec_length, pvec_length), STAT=stat)
+
+        ! Build initial density matrix
+        DO d = 1, n_domains
             CALL build_density_matrix(d)
         ENDDO
 
@@ -1122,6 +1198,9 @@ endif
         ENDDO
 
         DEALLOCATE ( hf_one_e, hf_two_e, hf_diis, hf_work, STAT=stat)
+
+        ! Deallocate memory for the density vector
+        DEALLOCATE(hf_Pvec, hf_Gvec, hf_Imat, STAT=stat)
 
         IF (stat.NE.0) THEN
             WRITE (error_message,'(a)') &

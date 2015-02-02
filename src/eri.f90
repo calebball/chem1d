@@ -10,7 +10,6 @@ MODULE eri
     USE error
     USE storage,       ONLY : one_e_in_domain, &
                             & eri_of_domain,   &
-                            & double_bar,      &
                             & hf_in_domain,    &
                             & mo_eri_domain,   &
                             & mo_double_bar
@@ -27,7 +26,6 @@ MODULE eri
 
     PRIVATE
     PUBLIC :: build_eri
-    PUBLIC :: build_double_bar_eri
     PUBLIC :: mo_eri_transform
     PUBLIC :: build_mo_double_bar
 
@@ -333,118 +331,6 @@ MODULE eri
         ENDIF
 
     END SUBROUTINE build_eri
-
-    SUBROUTINE build_double_bar_eri
-        !
-        ! This subroutine builds the full set of double
-        ! bar integrals for all domains
-        !
-        ! NOTE: Now in physicists notation!
-        !
-        IMPLICIT NONE
-
-        INTEGER :: di, dj, dk, dl, i, j, k, l, shifti, shiftj, shiftk, shiftl
-
-        FORALL (i=1:end_of_domain(n_domains), &
-               &j=1:end_of_domain(n_domains), &
-               &k=1:end_of_domain(n_domains), &
-               &l=1:end_of_domain(n_domains))
-            double_bar(i,j,k,l) = 0.d0
-        END FORALL
-
-        DO di = 1, n_domains
-        DO dj = 1, n_domains
-        DO dk = 1, n_domains
-        DO dl = 1, n_domains
-            IF (di.EQ.dk.AND.dj.EQ.dl.AND.di.EQ.dj) THEN
-                shifti = start_of_domain(di) - 1
-                shiftj = start_of_domain(dj) - 1
-                shiftk = start_of_domain(dk) - 1
-                shiftl = start_of_domain(dl) - 1
-
-                DO i = start_of_domain(di), end_of_domain(di)
-                DO j = start_of_domain(dj), end_of_domain(dj)
-                DO k = start_of_domain(dk), end_of_domain(dk)
-                DO l = start_of_domain(dl), end_of_domain(dl)
-
-                    IF (integral_check) THEN
-                        IF (double_bar(i,j,k,l).NE.0.d0) THEN
-                            CALL print_error("build_double_bar_eri", &
-                                &"overlapping integrals encountered (section 1)")
-write (*,*) di, "<", i, j, "|", k, l, ">"
-                        ENDIF
-                    ENDIF
-
-                    double_bar(i, j, k, l) = &
-                        &eri_of_domain(di)%with(di)%integral(i-shifti,k-shiftk,j-shiftj,l-shiftl) - &
-                        &eri_of_domain(di)%with(di)%integral(i-shifti,l-shiftl,j-shiftj,k-shiftk)
-
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-
-            ELSEIF (di.EQ.dk.AND.dj.EQ.dl.AND.di.NE.dj) THEN
-                shifti = start_of_domain(di) - 1
-                shiftj = start_of_domain(dj) - 1
-                shiftk = start_of_domain(dk) - 1
-                shiftl = start_of_domain(dl) - 1
-
-                DO i = start_of_domain(di), end_of_domain(di)
-                DO j = start_of_domain(dj), end_of_domain(dj)
-                DO k = start_of_domain(dk), end_of_domain(dk)
-                DO l = start_of_domain(dl), end_of_domain(dl)
-
-                    IF (integral_check) THEN
-                        IF (double_bar(i,j,k,l).NE.0.d0) THEN
-                            CALL print_error("build_double_bar_eri", &
-                                &"overlapping integrals encountered (section 1)")
-write (*,*) di, "<", i, j, "|", k, l, ">"
-                        ENDIF
-                    ENDIF
-
-                    double_bar(i, j, k, l) = &
-                        &eri_of_domain(di)%with(dj)%integral(i-shifti,k-shiftk,j-shiftj,l-shiftl)
-
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-
-            ELSEIF (di.EQ.dl.AND.dj.EQ.dk) THEN
-                shifti = start_of_domain(di) - 1
-                shiftj = start_of_domain(dj) - 1
-                shiftk = start_of_domain(dk) - 1
-                shiftl = start_of_domain(dl) - 1
-
-                DO i = start_of_domain(di), end_of_domain(di)
-                DO j = start_of_domain(dj), end_of_domain(dj)
-                DO k = start_of_domain(dk), end_of_domain(dk)
-                DO l = start_of_domain(dl), end_of_domain(dl)
-
-                    IF (integral_check) THEN
-                        IF (double_bar(i,j,k,l).NE.0.d0) THEN
-                            CALL print_error("build_double_bar_eri", &
-                                &"overlapping integrals encountered (section 1)")
-write (*,*) di, "<", i, j, "|", k, l, ">"
-                        ENDIF
-                    ENDIF
-
-                    double_bar(i, j, k, l) = &
-                        & - eri_of_domain(di)%with(dj)%integral(i-shifti,l-shiftl,j-shiftj,k-shiftk)
-
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-
-            ENDIF
-        ENDDO
-        ENDDO
-        ENDDO
-        ENDDO
-
-    END SUBROUTINE build_double_bar_eri
 
     SUBROUTINE mo_eri_transform(exit_state)
         !

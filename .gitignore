@@ -29,3 +29,7 @@
 
 # Vim swap files
 .*.swp
+
+# CHEM1D Specific
+*.inp
+*.csv

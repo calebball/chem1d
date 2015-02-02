@@ -7,9 +7,8 @@ PROGRAM chem1d
                              & clean_up_storage, &
                              & hf_in_domain
     USE eri,            ONLY : build_eri,            &
-                             & build_double_bar_eri, &
-                             & mo_eri_transform,     &
-                             & build_mo_double_bar
+                             & mo_eri_transform
+!                            & build_mo_double_bar
     USE hartree_fock,   ONLY : init_hartree_fock,    &
                              & clean_up_hf,          &
                              & hf_one_electron,      &
@@ -111,7 +110,6 @@ real(dp) :: start(3)
                 ! Build ERI arrays
                 CALL build_eri(stat)
                 IF (stat.GT.1) STOP
-                CALL build_double_bar_eri
 
                 ! Setup and run a HF calculation
                 CALL hf_one_electron(stat)
@@ -156,7 +154,6 @@ real(dp) :: start(3)
                 ! Build ERI arrays
                 CALL build_eri(stat)
                 IF (stat.GT.1) STOP
-                CALL build_double_bar_eri
 
                 ! Setup and run a HF calculation
                 CALL hf_one_electron(stat)
@@ -180,7 +177,6 @@ real(dp) :: start(3)
         ! Build ERI arrays
         CALL build_eri(stat)
         IF (stat.GT.1) STOP
-        CALL build_double_bar_eri
 
         ! Setup and run a HF calculation
         CALL print_hf_start
@@ -192,7 +188,6 @@ real(dp) :: start(3)
         IF (stat.GT.1) STOP
 
         CALL print_hf_end
-!       CALL clean_up_hf(stat)
 
 DO d = 1, n_domains
 DO i = 1, functions_in_domain(d)
@@ -205,7 +200,7 @@ ENDDO
         ! Transform ERIs to MO basis
         CALL mo_eri_transform(stat)
         IF (stat.GT.1) STOP
-        CALL build_mo_double_bar
+!       CALL build_mo_double_bar
 
         ! Run MP2 and MP3 correlation calculations
         CALL compute_mp2
