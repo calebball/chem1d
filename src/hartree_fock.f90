@@ -773,23 +773,24 @@ endif
 
         INTEGER :: d, m, n, i, j
         INTEGER, POINTER :: length
-integer :: vec_length, offset
+        INTEGER :: offset
 
-        vec_length = 0
-        DO d = 1, n_domains
-            vec_length = vec_length + functions_in_domain(d)**2
-        ENDDO
+        CALL DGEMV('N', &
+                  & matrix_vec_length, &
+                  & matrix_vec_length, &
+                  & 1.d0, &
+                  & hf_Imat, &
+                  & matrix_vec_length, &
+                  & hf_Pvec, &
+                  & 1, &
+                  & 0.d0, &
+                  & hf_Gvec, &
+                  & 1)
 
-        CALL DGEMV('N', vec_length, vec_length, 1.d0, hf_Imat, vec_length, hf_Pvec, 1, 0.d0, hf_Gvec, 1)
-
+        offset = 1
         DO d = 1, n_domains
             IF (electrons_in_domain(d).EQ.0) CYCLE
-
-            ! Find where d starts in the list of bf pairs
-            offset = 1
-            DO i = 1, d - 1
-                offset = offset + functions_in_domain(i)**2
-            ENDDO
+            IF (d.GT.1) offset = offset + functions_in_domain(d-1)**2
 
             DO m = 1, functions_in_domain(d)
                 DO n = 1, functions_in_domain(d)
@@ -1055,7 +1056,6 @@ integer :: vec_length, offset
         INTEGER, INTENT(OUT) :: exit_state
 
         INTEGER :: d, i, j, stat
-        INTEGER :: pvec_length
         INTEGER, POINTER :: m
         CHARACTER(LEN=58) :: error_message
 
@@ -1073,10 +1073,8 @@ integer :: vec_length, offset
             RETURN
         ENDIF
 
-        pvec_length = 0
         DO d = 1, n_domains
             m => functions_in_domain(d)
-            pvec_length = pvec_length + m**2
 
             ! Allocate memory for one electron objects
             ALLOCATE ( hf_one_e(d)%s_evals(m),      &
@@ -1125,8 +1123,10 @@ integer :: vec_length, offset
         ENDDO
 
         ! Allocate memory for the density vector
-        ALLOCATE(hf_Pvec(pvec_length), hf_Gvec(pvec_length), &
-            &hf_Imat(pvec_length, pvec_length), STAT=stat)
+        ALLOCATE(hf_Pvec(matrix_vec_length), &
+                &hf_Gvec(matrix_vec_length), &
+                &hf_Imat(matrix_vec_length, matrix_vec_length), &
+                &STAT=stat)
 
         ! Build initial density matrix
         DO d = 1, n_domains

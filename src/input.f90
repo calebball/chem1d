@@ -14,7 +14,8 @@ MODULE input
              & conv_check_type, &
              & diis_length, &
              & primary_basis_th, secondary_basis_th, &
-             & scan_length, scan_type
+             & scan_length, scan_type, &
+             & matrix_vec_length
     REAL(dp) :: alpha, scf_threshold, basis_threshold, scan_step
     LOGICAL  :: input_set, default_input, print_orbitals, scan_job
     LOGICAL  :: debug = .FALSE.
@@ -382,6 +383,8 @@ MODULE input
 
                     functions_in_domain(i) = evens_in_domain(i) + &
                                            & odds_in_domain(i)
+                    matrix_vec_length = matrix_vec_length + &
+                                      & functions_in_domain(i)**2
                 ELSE
                     IF (exps.GT.0) THEN
                         functions_in_domain(i) = exps
@@ -391,6 +394,8 @@ MODULE input
 
                     evens_in_domain(i) = 0
                     odds_in_domain(i) = 0
+                    matrix_vec_length = matrix_vec_length + &
+                                      & functions_in_domain(i)**2
                 ENDIF
 
                 ! Check that there are sufficient functions to house
