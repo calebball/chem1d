@@ -138,12 +138,14 @@ MODULE one_e_integrals
 
             only_mu = 15.d0 / 16.d0
             DO m = 2, mu
-                only_mu = only_mu * dble(16 * m**2 - 1) / dble(8 * m * (2 * m - 1))
+                only_mu = only_mu * dble(16 * m**2 - 1) / &
+                    & dble(8 * m * (2 * m - 1))
             ENDDO
 
             only_nu = 15.d0 / 16.d0
             DO m = 2, nu
-                only_nu = only_nu * dble(16 * m**2 - 1) / dble(8 * m * (2 * m - 1))
+                only_nu = only_nu * dble(16 * m**2 - 1) / &
+                    & dble(8 * m * (2 * m - 1))
             ENDDO
 
             overlap_integral = mu_p_nu * sqrt(only_mu * only_nu)
@@ -155,22 +157,24 @@ MODULE one_e_integrals
 
             only_mu = 1.d0
             DO m = 2, mu
-                only_mu = only_mu * dble(3 + 16 * m * (m + 1)) / dble(8 * m * (2 * m - 1))
+                only_mu = only_mu * dble(3 + 16 * m * (m + 1)) / &
+                    & dble(8 * m * (2 * m - 1))
             ENDDO
 
             only_nu = 1.d0
             DO m = 2, nu
-                only_nu = only_nu * dble(3 + 16 * m * (m + 1)) / dble(8 * m * (2 * m - 1))
+                only_nu = only_nu * dble(3 + 16 * m * (m + 1)) / &
+                    & dble(8 * m * (2 * m - 1))
             ENDDO
 
             overlap_integral = mu_p_nu * sqrt(only_mu * only_nu)
         CASE DEFAULT
-            ! WARNING : This procedure needs to be PURE, and the
-            !           current error module will not allow that
-!           WRITE (error_message,'(a, i1, a)') &
-!               & "Unrecognised domain type (", id, ")"
-!           CALL print_warning("overlap_integral", error_message)
+
+            ! NOTE : It would be nice to catch an error at this point.
+            !        Using an error routine is not pure, so we need
+            !        something better.
             overlap_integral = 0.d0
+
         END SELECT
 
     END FUNCTION overlap_integral
@@ -230,10 +234,13 @@ MODULE one_e_integrals
             END FORALL
 
         ELSE
+
             WRITE (error_message,'(a)') &
                 & "Supplied domain index does not exist"
             CALL print_warning("kinetic_int_in_domain", error_message)
+
         ENDIF
+
     END SUBROUTINE kinetic_int_in_domain
 
     SUBROUTINE potential_int_in_domain(domain, overlap, integrals)
@@ -283,8 +290,8 @@ MODULE one_e_integrals
                     dom_nuc = 1
                     other_nuc = n_nuclei
                 ELSE
-                    dom_nuc = 1
-                    other_nuc = n_nuclei
+                    dom_nuc = n_nuclei
+                    other_nuc = 1
                 ENDIF
 
                 ! Find the interaction with the outermost nuclei
@@ -306,7 +313,7 @@ MODULE one_e_integrals
                 ! Find the interaction with the interior nuclei
                 DO X = 2, n_nuclei - 1
                     Z = nuclear_charge(X)
-                    R = nuclear_position(X) - nuclear_position(dom_nuc)
+                    R = abs(nuclear_position(X) - nuclear_position(dom_nuc))
 
                     DO i = 1, n_exps
                     DO j = 1, n_exps
