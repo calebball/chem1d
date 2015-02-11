@@ -7,7 +7,6 @@ MODULE true_eri_poly
     ! seperate finite domains
     !
     USE constants
-    USE input, ONLY : integral_check
     USE error
     USE one_e_integrals, ONLY : overlap_integral
     IMPLICIT NONE
@@ -132,25 +131,6 @@ MODULE true_eri_poly
         ! Construct EEEE prototype integrals
         CALL compute_eeee_mn_integrals(A, B, R, max_m + 1, scratch)
 
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, e1
-            DO l = 1, e2
-            DO s = 1, e2
-                IF (eri_EEEE_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EEEE_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
-
         ! Pack the EEEE type integrals
         FORALL (m = 1:e1, n = 1:e1, l = 1:e2, s = 1:e2)
             eri_EEEE_one(m, n, l, s) = ov_EE_one(m,n) * ov_EE_two(l,s) * &
@@ -161,25 +141,6 @@ MODULE true_eri_poly
 
         ! Pack the EEOO type integrals
 
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, e1
-            DO l = 1, o2
-            DO s = 1, o2
-                IF (eri_EEOO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OOEE_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
-
         FORALL (m = 1:e1, n = 1:e1, l = 1:o2, s = 1:o2)
             eri_EEOO_one(m, n, l, s) = ov_EE_one(m,n) * ov_OO_two(l,s) * &
                 & (dble(3 + 2 * (l + s)) * scratch(m + n, l + s) - &
@@ -187,50 +148,12 @@ MODULE true_eri_poly
             eri_OOEE_two(l, s, m, n) = eri_EEOO_one(m, n, l, s)
         END FORALL
 
-        IF (integral_check) THEN
-            DO m = 1, o1
-            DO n = 1, o1
-            DO l = 1, e2
-            DO s = 1, e2
-                IF (eri_OOEE_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EEOO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
-
         FORALL (m = 1:o1, n = 1:o1, l = 1:e2, s = 1:e2)
             eri_OOEE_one(m, n, l, s) = ov_OO_one(m,n) * ov_EE_two(l,s) * &
                 & (dble(3 + 2 * (m + n)) * scratch(m + n, l + s) - &
                 &  dble(2 + 2 * (m + n)) * scratch(m + n + 1, l + s))
             eri_EEOO_two(l, s, m, n) = eri_OOEE_one(m, n, l, s)
         END FORALL
-
-        IF (integral_check) THEN
-            DO m = 1, o1
-            DO n = 1, o1
-            DO l = 1, o2
-            DO s = 1, o2
-                IF (eri_OOOO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OOOO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         ! Pack the OOOO type integrals
         FORALL (m = 1:o1, n = 1:o1, l = 1:o2, s = 1:o2)
@@ -245,50 +168,6 @@ MODULE true_eri_poly
                 &  scratch(m + n + 1, l + s + 1) )
             eri_OOOO_two(l, s, m, n) = eri_OOOO_one(m, n, l, s)
         END FORALL
-
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, o1
-            DO l = 1, e2
-            DO s = 1, o2
-                IF (eri_EOEO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOOE_one(m,n,s,l).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEEO_one(n,m,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEOE_one(n,m,s,l).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-
-                IF (eri_EOEO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOOE_two(l,s,n,m).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEEO_two(s,l,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEOE_two(s,l,n,m).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         ! Pack the EOEO type integrals
         frac = - 4.d0 * B / A
@@ -317,42 +196,15 @@ MODULE true_eri_poly
             eri_OEOE_two(s, l, n, m) = eri_EOEO_two(l, s, m, n)
         END FORALL
 
-        ! Construct EEEO prototype integrals
-
+        ! Reset scratch space
         FORALL (m=-1:max_m+1, n=-1:max_m+1)
             scratch(m,n) = 0.d0
         END FORALL
 
+        ! Construct EEEO prototype integrals
         CALL compute_eeeo_mn_integrals(A, B, R, max_m + 1, scratch)
 
         ! Pack the EEEO type integrals
-
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, e1
-            DO l = 1, e2
-            DO s = 1, o2
-                IF (eri_EEEO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EEOE_one(m,n,s,l).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOEE_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEEE_two(s,l,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         FORALL (m = 1:e1, n = 1:e1, l = 1:e2, s = 1:o2)
             eri_EEEO_one(m, n, l, s) = - ov_EE_one(m,n) * overlap_integral(l, s, 2) * &
@@ -364,33 +216,6 @@ MODULE true_eri_poly
         END FORALL
 
         ! Pack the EOOO type integrals
-
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, o1
-            DO l = 1, o2
-            DO s = 1, o2
-                IF (eri_OOOE_two(l,s,n,m).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OOEO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEOO_one(n,m,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOOO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         FORALL (m = 1:e1, n = 1:o1, l = 1:o2, s = 1:o2)
             eri_EOOO_two(l, s, m, n) = - overlap_integral(l, s, 2) * ov_OO_one(m,n) * &
@@ -408,33 +233,6 @@ MODULE true_eri_poly
 
         ! Pack the EEEO type integrals
 
-        IF (integral_check) THEN
-            DO m = 1, e1
-            DO n = 1, o1
-            DO l = 1, e2
-            DO s = 1, e2
-                IF (eri_EEEO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EEOE_two(l,s,n,m).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOEE_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEEE_one(n,m,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
-
         FORALL (m = 1:e1, n = 1:o1, l = 1:e2, s = 1:e2)
             eri_EEEO_two(l, s, m, n) = overlap_integral(m, n, 2) * ov_EE_two(l,s) * &
                 & A / sqrt(dble(3 + 4 * m)) * scratch(l + s, m + n)
@@ -445,33 +243,6 @@ MODULE true_eri_poly
         END FORALL
 
         ! Pack the EOOO type integrals
-
-        IF (integral_check) THEN
-            DO m = 1, o1
-            DO n = 1, o1
-            DO l = 1, e2
-            DO s = 1, o2
-                IF (eri_OOOE_one(m,n,s,l).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OOEO_one(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_OEOO_two(s,l,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-                IF (eri_EOOO_two(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("true_eeee", &
-                        &"overlapping integrals found")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         FORALL (m = 1:o1, n = 1:o1, l = 1:e2, s = 1:o2)
             eri_EOOO_one(m, n, l, s) = ov_OO_two(l,s) * overlap_integral(m, n, 2) * & 

@@ -7,7 +7,6 @@ MODULE quasi_eri
     ! the same domain
     !
     USE constants
-    USE input, ONLY : integral_check
     USE error
     USE one_e_integrals, ONLY : overlap_integral
     USE quasi_data
@@ -57,13 +56,6 @@ MODULE quasi_eri
             DO l = 1, functions
             DO s = 1, functions
                 eta = l**2 + s**2
-
-                IF (integral_check) THEN
-                    IF (integrals(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_llll", &
-                            &"overlapping integrals found")
-                    ENDIF
-                ENDIF
 
                 integrals(m,n,l,s) = overlap(m,n) * overlap(l,s) * &
                     & alpha * zeta * eta * &
@@ -118,10 +110,11 @@ MODULE quasi_eri
         overlap_ee => overlap(1:evens, 1:evens)
         overlap_oo => overlap(evens+1:evens+odds, evens+1:evens+odds)
 
-! WARNING : Hacky bug fix
-forall (m = 1:evens+odds, n = 1:evens+odds, l = 1:evens+odds, s = 1:evens+odds)
-    integrals(m,n,l,s) = 0.d0
-end forall
+        ! WARNING : Hacky bug fix
+        FORALL (m = 1:evens+odds, n = 1:evens+odds, &
+               &l = 1:evens+odds, s = 1:evens+odds)
+            integrals(m,n,l,s) = 0.d0
+        END FORALL
 
         eri_EEEE => integrals(1:evens, 1:evens, &
                              &1:evens, 1:evens)
@@ -147,13 +140,6 @@ end forall
             DO l = 1, evens
             DO s = 1, evens
 
-                IF (integral_check) THEN
-                    IF (eri_EEEE(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping EEEE found")
-                    ENDIF
-                ENDIF
-
                 eri_EEEE(m,n,l,s) = overlap_ee(m,n) * overlap_ee(l,s) * &
                                   & quasi_eeee_data(m + n, l + s) / A
 
@@ -163,17 +149,6 @@ end forall
             ! (EE|OO)
             DO l = 1, odds
             DO s = 1, odds
-
-                IF (integral_check) THEN
-                    IF (eri_EEOO(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping EEOO found")
-                    ENDIF
-                    IF (eri_OOEE(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping OOEE found")
-                    ENDIF
-                ENDIF
 
                 eri_EEOO(m,n,l,s) = overlap_ee(m,n) * overlap_oo(l,s) * &
                     & ((3 + 2 * (l + s)) * quasi_eeee_data(m + n, l + s) - &
@@ -188,25 +163,6 @@ end forall
         DO n = 1, odds
             DO l = 1, evens
             DO s = 1, odds
-
-                IF (integral_check) THEN
-                    IF (eri_EOEO(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping EOEO found")
-                    ENDIF
-                    IF (eri_EOOE(m,n,s,l).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping EOOE found")
-                    ENDIF
-                    IF (eri_OEEO(n,m,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping OEEO found")
-                    ENDIF
-                    IF (eri_OEOE(n,m,s,l).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping OEOE found")
-                    ENDIF
-                ENDIF
 
                 eri_EOEO(m,n,l,s) = overlap_integral(m,n,2) * &
                                   & overlap_integral(l,s,2) * &
@@ -226,13 +182,6 @@ end forall
         DO n = 1, odds
             DO l = 1, odds
             DO s = 1, odds
-
-                IF (integral_check) THEN
-                    IF (eri_OOOO(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("quasi_poly", &
-                            &"overlapping OOOO found")
-                    ENDIF
-                ENDIF
 
                 eri_OOOO(m,n,l,s) = overlap_oo(m,n) * overlap_oo(l,s) * &
                     & ((3 + 2 * (m + n)) * (3 + 2 * (l + s)) * quasi_eeee_data(m + n, l + s) - &

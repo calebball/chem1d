@@ -504,10 +504,10 @@ MODULE moller_plesset
             ! choose 2 virtual orbitals
             DO dr = 1, n_domains
             DO r = start_of_domain(dr) + electrons_in_domain(dr), &
-                 & start_of_domain(dr) + functions_kept(dr) - 1
+                 & start_of_domain(dr) + orbitals_in_domain(dr) - 1
             DO ds = 1, n_domains
             DO s = start_of_domain(ds) + electrons_in_domain(ds), &
-                 & start_of_domain(ds) + functions_kept(ds) - 1
+                 & start_of_domain(ds) + orbitals_in_domain(ds) - 1
 
                 ! The mo_double_bar array indices refer to the
                 ! basis functions in all the domains
@@ -583,10 +583,10 @@ MODULE moller_plesset
             ! choose 2 virtual orbitals
             DO dr = 1, n_domains
             DO r = start_of_domain(dr) + electrons_in_domain(dr), &
-                 & start_of_domain(dr) + functions_kept(dr) - 1
+                 & start_of_domain(dr) + orbitals_in_domain(dr) - 1
             DO ds = 1, n_domains
             DO s = start_of_domain(ds) + electrons_in_domain(ds), &
-                 & start_of_domain(ds) + functions_kept(ds) - 1
+                 & start_of_domain(ds) + orbitals_in_domain(ds) - 1
 
                 ! The mo_double_bar array indices refer to the
                 ! basis functions in all the domains
@@ -649,16 +649,16 @@ MODULE moller_plesset
             ! choose 4 virtual orbitals
             DO dr = 1, n_domains
             DO r = start_of_domain(dr) + electrons_in_domain(dr), &
-                 & start_of_domain(dr) + functions_kept(dr) - 1
+                 & start_of_domain(dr) + orbitals_in_domain(dr) - 1
             DO ds = 1, n_domains
             DO s = start_of_domain(ds) + electrons_in_domain(ds), &
-                 & start_of_domain(ds) + functions_kept(ds) - 1
+                 & start_of_domain(ds) + orbitals_in_domain(ds) - 1
             DO dt = 1, n_domains
             DO t = start_of_domain(dt) + electrons_in_domain(dt), &
-                 & start_of_domain(dt) + functions_kept(dt) - 1
+                 & start_of_domain(dt) + orbitals_in_domain(dt) - 1
             DO du = 1, n_domains
             DO u = start_of_domain(du) + electrons_in_domain(du), &
-                 & start_of_domain(du) + functions_kept(du) - 1
+                 & start_of_domain(du) + orbitals_in_domain(du) - 1
 
                 shifta = start_of_domain(da) - 1
                 shiftb = start_of_domain(db) - 1
@@ -716,13 +716,13 @@ MODULE moller_plesset
             ! choose 3 virtual orbitals
             DO dr = 1, n_domains
             DO r = start_of_domain(dr) + electrons_in_domain(dr), &
-                 & start_of_domain(dr) + functions_kept(dr) - 1
+                 & start_of_domain(dr) + orbitals_in_domain(dr) - 1
             DO ds = 1, n_domains
             DO s = start_of_domain(ds) + electrons_in_domain(ds), &
-                 & start_of_domain(ds) + functions_kept(ds) - 1
+                 & start_of_domain(ds) + orbitals_in_domain(ds) - 1
             DO dt = 1, n_domains
             DO t = start_of_domain(dt) + electrons_in_domain(dt), &
-                 & start_of_domain(dt) + functions_kept(dt) - 1
+                 & start_of_domain(dt) + orbitals_in_domain(dt) - 1
 
                 shifta = start_of_domain(da) - 1
                 shiftb = start_of_domain(db) - 1

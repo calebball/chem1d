@@ -159,13 +159,13 @@ MODULE storage
 
         INTEGER :: d
 
-        ! NOTE : Does this procedure need error checks?
         DO d = 1, n_domains
             CALL overlap_int_in_domain(d, one_e_in_domain(d)%overlap)
             CALL kinetic_int_in_domain(d, one_e_in_domain(d)%kinetic)
             CALL potential_int_in_domain(d, one_e_in_domain(d)%overlap, &
                                         &one_e_in_domain(d)%potential)
         ENDDO
+
     END SUBROUTINE populate_one_e_matrices
 
     SUBROUTINE clean_up_storage(exit_state)

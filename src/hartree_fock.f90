@@ -80,19 +80,16 @@ MODULE hartree_fock
         ! Describes the exit condition of the routine
         !   0 = Procedure terminated successfully
         !   1 = Non-fatal error encountered
-        !   2 = DSYEVR failed
-        !   3 = DSYEVR called incorrectly
+        !   2 = DSYEV/DGESVD failed
+        !   3 = DSYEV/DGESVD called incorrectly
         !   4 = Negative eigenvalues found
+        !   5 = Insufficient orbitals for electrons
         !
         IMPLICIT NONE
 
         INTEGER, INTENT(OUT) :: exit_state
 
-        INTEGER :: d, i, j, M, INFO, throw_count
-        REAL(dp) :: condition, temp_thresh
-        REAL(dp), POINTER :: overlap_e(:,:), u_matrix_e(:,:), evals_e(:)
-        REAL(dp), POINTER :: overlap_o(:,:), u_matrix_o(:,:), evals_o(:)
-        INTEGER, POINTER :: evens, odds
+        INTEGER :: d, i, j, INFO, throw_count
         CHARACTER(LEN=58) :: error_message
 
         DO d = 1, n_domains
@@ -109,31 +106,38 @@ MODULE hartree_fock
                 &26 * functions_in_domain(d), & ! LWORK
                 &INFO                         ) ! INFO
 
-            ! Choose how many functions to keep
-            IF (primary_basis_th.GT.0.AND.&
-               &secondary_basis_th.GT.primary_basis_th) THEN
-
-                functions_kept(d) = functions_in_domain(d)
-                throw_count = 1
-                temp_thresh = 10.d0**(-primary_basis_th)
-                DO WHILE (hf_one_e(d)%s_evals(throw_count).LT.basis_threshold)
-                    functions_kept(d) = functions_kept(d) - 1
-                    throw_count = throw_count + 1
-                ENDDO
-                curr_basis_th = primary_basis_th
-
-            ELSE
-
-                functions_kept(d) = functions_in_domain(d)
-                throw_count = 1
-                DO WHILE (hf_one_e(d)%s_evals(throw_count).LT.basis_threshold)
-                    functions_kept(d) = functions_kept(d) - 1
-                    throw_count = throw_count + 1
-                ENDDO
-
+            IF (INFO.GT.0) THEN
+                WRITE (error_message,'(a, i4)') &
+                    & "DSYEV failed in domain ", d
+                CALL print_error("hf_one_electron", error_message)
+                exit_state = 2
+                RETURN
+            ELSEIF (INFO.LT.0) THEN
+                WRITE (error_message,'(a, i4, a, i2, a)') &
+                    & "DSYEV in domain ", d, "received incorrect ", &
+                    & abs(INFO), "th argument"
+                CALL print_error("hf_one_electron", error_message)
+                exit_state = 3
+                RETURN
             ENDIF
 
-            ! DSYEVR destroys the overlap matrix, so we have to repair it
+            ! How many orbitals will we build?
+            orbitals_in_domain(d) = functions_in_domain(d)
+            throw_count = 1
+            DO WHILE (hf_one_e(d)%s_evals(throw_count).LT.basis_threshold)
+                orbitals_in_domain(d) = orbitals_in_domain(d) - 1
+                throw_count = throw_count + 1
+            ENDDO
+
+            ! Check if we still have enough orbitals for the electrons
+            IF (orbitals_in_domain(d).LT.electrons_in_domain(d)) THEN
+                WRITE (error_message,'(a, i4)') &
+                    & "Insufficient orbitals left in domain ", d
+                CALL print_error("hf_one_electron", error_message)
+                exit_state = 5
+            ENDIF
+
+            ! DSYEV destroys the overlap matrix, so we have to repair it
             FORALL (i=1:functions_in_domain(d), j=1:functions_in_domain(d))
                 one_e_in_domain(d)%overlap(i,j) = 0.d0
             ENDFORALL
@@ -157,13 +161,13 @@ MODULE hartree_fock
 
             IF (INFO.GT.0) THEN
                 WRITE (error_message,'(a, i4)') &
-                    & "DSYEVR failed in domain ", 1
+                    & "DGESVD failed in domain ", d
                 CALL print_error("hf_one_electron", error_message)
                 exit_state = 2
                 RETURN
             ELSEIF (INFO.LT.0) THEN
                 WRITE (error_message,'(a, i4, a, i2, a)') &
-                    & "DSYEVR in domain ", 1, "received incorrect ", &
+                    & "DGESVD in domain ", d, "received incorrect ", &
                     & abs(INFO), "th argument"
                 CALL print_error("hf_one_electron", error_message)
                 exit_state = 3
@@ -212,44 +216,9 @@ MODULE hartree_fock
 !               &hf_work(d)%matrix(:,:,1), functions_in_domain(d), 0.d0, &
 !               &hf_in_domain(d)%orbitals, functions_in_domain(d))
 
-!write (*,*) "OVERLAP", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') one_e_in_domain(d)%overlap(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!write (*,*) "KINETIC", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') one_e_in_domain(d)%kinetic(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!write (*,*) "POTENTIAL", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') one_e_in_domain(d)%potential(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
         ENDDO
 
         CALL build_integral_matrix
-
-if (.NOT.scan_job) then
-write (*,*) "functions kept"
-do d = 1, n_domains
-write (*,*) functions_kept(d), "of", functions_in_domain(d)
-enddo
-write (*,*)
-endif
 
     END SUBROUTINE hf_one_electron
 
@@ -274,53 +243,31 @@ endif
 
         INTEGER, INTENT(OUT) :: exit_state
 
-        INTEGER :: d, i, j, M, INFO, throw_count
+        INTEGER :: d, i, j, INFO
         CHARACTER(LEN=80) :: error_message
-        REAL(dp) :: error, last_energy, temp_thresh
 
         ! Assume we converge, check later if a domain hasn't
         hf_converged = .TRUE.
 
         ! Update the density matrix for all the domains
         DO d = 1, n_domains
-            if (curr_hf_cycle.GT.0) CALL build_density_matrix(d)
+            IF (curr_hf_cycle.GT.0) CALL build_density_matrix(d)
 
-if (debug) then
-    ploop: do i = 1, functions_in_domain(d)
-    do j = i, functions_in_domain(d)
-        if (hf_in_domain(d)%density(i,j).ne.hf_in_domain(d)%density(i,j)) then
-            write (*,*) "density in domain", d, " not symmetric"
-            exit ploop
-        endif
-    enddo
-    enddo ploop
-endif
+            IF (debug) THEN
+                ploop: DO i = 1, functions_in_domain(d)
+                DO j = i, functions_in_domain(d)
+                    IF (hf_in_domain(d)%density(i,j).ne.hf_in_domain(d)%density(i,j)) then
+                        WRITE (*,*) "density in domain", d, " not symmetric"
+                        EXIT ploop
+                    ENDIF
+                ENDDO
+                ENDDO ploop
+            ENDIF
 
         ENDDO
 
         ! Build two-electron matrix
         CALL build_g_matrix
-
-!d = 3
-!write (*,*)
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') hf_in_domain(d)%density(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-
-!do d = 1, n_domains
-!write (*,*) "G", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') hf_two_e(d)%g(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
-!enddo
 
         ! Solve each domain individually
         DO d = 1, n_domains
@@ -331,25 +278,16 @@ endif
                              & one_e_in_domain(d)%potential + &
                              & hf_two_e(d)%g
 
-if (debug) then
-    floop: do i = 1, functions_in_domain(d)
-    do j = i, functions_in_domain(d)
-        if (hf_two_e(d)%fock(i,j).ne.hf_two_e(d)%fock(i,j)) then
-            write (*,*) "fock in domain", d, " not symmetric"
-            exit floop
-        endif
-    enddo
-    enddo floop
-endif
-
-!write (*,*) "FOCK", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') hf_two_e(d)%fock(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
+            IF (debug) THEN
+                floop: DO i = 1, functions_in_domain(d)
+                DO j = i, functions_in_domain(d)
+                    IF (hf_two_e(d)%fock(i,j).ne.hf_two_e(d)%fock(i,j)) then
+                        WRITE (*,*) "fock in domain", d, " not symmetric"
+                        EXIT floop
+                    ENDIF
+                ENDDO
+                ENDDO floop
+            ENDIF
 
             ! Shuffle the stored DIIS matrices
             curr_diis = min(curr_hf_cycle + 1, diis_length)
@@ -366,13 +304,12 @@ endif
             CALL orthogonalize(d, hf_diis(d)%stored_error(:,:,1))
 
             ! Build the new Fock prime matrix
-            IF (curr_hf_cycle.LT.diis_length.OR.diis_length.EQ.0&
-                &.OR.check_convergence(d, .TRUE.)) THEN
-!           IF (curr_hf_cycle.LT.diis_length) THEN
+            IF (curr_hf_cycle.LT.diis_length&
+               &.OR.diis_length.EQ.0&
+               &.OR.check_convergence(d, .TRUE.)) THEN
                 hf_two_e(d)%fock_p = hf_two_e(d)%fock
             ELSE
 
-!write (*,'(i1)',advance='no') d
                 FORALL (i=1:functions_in_domain(d), j=1:functions_in_domain(d))
                     hf_two_e(d)%fock_p(i,j) = 0.d0
                 END FORALL
@@ -401,53 +338,27 @@ endif
             ENDIF
             CALL orthogonalize(d, hf_two_e(d)%fock_p)
 
-if (debug) then
-    fploop: do i = 1, functions_in_domain(d)
-    do j = i, functions_in_domain(d)
-        if (hf_two_e(d)%fock_p(i,j).ne.hf_two_e(d)%fock_p(i,j)) then
-            write (*,*) "fock in domain", d, " not symmetric"
-            exit fploop
-        endif
-    enddo
-    enddo fploop
-endif
-
-!write (*,*) "FOCK_P", d
-!do i = 1, functions_in_domain(d)
-!do j = 1, functions_in_domain(d)
-!    write (*,"(F10.5)",advance='no') hf_two_e(d)%fock_p(i,j)
-!enddo
-!write (*,*)
-!enddo
-!write (*,*)
+            IF (debug) THEN
+                fploop: DO i = 1, functions_in_domain(d)
+                DO j = i, functions_in_domain(d)
+                    IF (hf_two_e(d)%fock_p(i,j).ne.hf_two_e(d)%fock_p(i,j)) then
+                        WRITE (*,*) "fock in domain", d, " not symmetric"
+                        EXIT fploop
+                    ENDIF
+                ENDDO
+                ENDDO fploop
+            ENDIF
 
             ! Diagonalise transformed fock matrix
             hf_work(d)%matrix(:,:,1) = hf_two_e(d)%fock_p
-            CALL DSYEV('V', 'U',         & ! JOBZ, UPLO
-                &functions_kept(d),            & ! N
+            CALL DSYEV('V', 'U',               & ! JOBZ, UPLO
+                &orbitals_in_domain(d),        & ! N
                 &hf_work(d)%matrix(:,:,1),     & ! A
                 &functions_in_domain(d),       & ! LDA
                 &hf_in_domain(d)%orb_energies, & ! W
                 &hf_work(d)%WORK,              & ! WORK
                 &26 * functions_in_domain(d),  & ! LWORK
                 &INFO                          ) ! INFO
-
-!           CALL DSYEVR('V', 'A', 'U',         & ! JOBZ, RANGE, UPLO
-!               &functions_kept(d),            & ! N
-!               &hf_two_e(d)%fock_p,           & ! A
-!               &functions_in_domain(d),       & ! LDA
-!               &0.d0, 0.d0, 0, 0,             & ! VL, VU, IL, IU
-!               &0,                            & ! ABSTOL
-!               &M,                            & ! M
-!               &hf_in_domain(d)%orb_energies, & ! W
-!               &hf_work(d)%matrix(:,:,1),     & ! Z
-!               &functions_in_domain(d),       & ! LDZ
-!               &hf_work(d)%ISUPPZ,            & ! ISUPPZ
-!               &hf_work(d)%WORK,              & ! WORK
-!               &26 * functions_in_domain(d),  & ! LWORK
-!               &hf_work(d)%IWORK,             & ! IWORK
-!               &10 * functions_in_domain(d),  & ! LIWORK
-!               &INFO                          ) ! INFO
 
             IF (INFO.GT.0) THEN
                 WRITE (error_message,'(a, i4, a)') &
@@ -465,23 +376,22 @@ endif
             ENDIF
 
             ! Back transform the eigenvectors
-            CALL DGEMM('N', 'N',           & ! TRANSA, TRANSB
-                &functions_in_domain(d),   & ! M
-                &functions_kept(d),        & ! N
-                &functions_kept(d),        & ! K
-                &1.d0,                     & ! ALPHA
-                &hf_one_e(d)%x_matrix(:,1:functions_kept(d)),   & ! A
-                &functions_in_domain(d),   & ! LDA
-                &hf_work(d)%matrix(:,:,1), & ! B
-                &functions_in_domain(d),   & ! LDB
-                &0.d0,                     & ! BETA
-                &hf_in_domain(d)%orbitals, & ! C
-                &functions_in_domain(d)    ) ! LDC
+            CALL DGEMM('N', 'N',                                    & ! TRANSA, TRANSB
+                &functions_in_domain(d),                            & ! M
+                &orbitals_in_domain(d),                             & ! N
+                &orbitals_in_domain(d),                             & ! K
+                &1.d0,                                              & ! ALPHA
+                &hf_one_e(d)%x_matrix(:,1:orbitals_in_domain(d)),   & ! A
+                &functions_in_domain(d),                            & ! LDA
+                &hf_work(d)%matrix(:,:,1),                          & ! B
+                &functions_in_domain(d),                            & ! LDB
+                &0.d0,                                              & ! BETA
+                &hf_in_domain(d)%orbitals,                          & ! C
+                &functions_in_domain(d)                             ) ! LDC
 
             ! Check convergence
             IF (curr_hf_cycle.GT.0) THEN
                 hf_converged = hf_converged.AND.&
-!                   &maxval(abs(hf_diis(d)%stored_error(:,:,1))).LT.scf_threshold
                     &check_convergence(d, .FALSE.)
             ELSE
                 hf_converged = .FALSE.
@@ -496,36 +406,9 @@ endif
         IF (.NOT.hf_converged.AND.(curr_hf_cycle.LT.max_scf_cycles)) &
             & CALL hf_scf_cycle(exit_state)
 
-        ! Check if we're slowly increasing our basis and
-        ! restart the SCF if we are
-        IF (primary_basis_th.GT.0.AND.&
-           &secondary_basis_th.GT.curr_basis_th) THEN
+        ! Tell the level above if we fail to converge in the alotted cycles
+        IF ((.NOT.hf_converged).AND.exit_state.EQ.0) exit_state = 1
 
-!write (*,*) "KICK!"
-            curr_basis_th = curr_basis_th + 1
-            temp_thresh = 10.d0**(-curr_basis_th)
-
-            DO d = 1, n_domains
-                functions_kept(d) = functions_in_domain(d)
-                throw_count = 1
-                DO WHILE (hf_one_e(d)%s_evals(throw_count).LT.basis_threshold)
-                    functions_kept(d) = functions_kept(d) - 1
-                    throw_count = throw_count + 1
-                ENDDO
-            ENDDO
-
-            curr_hf_cycle = 0
-            IF (curr_hf_cycle.LT.max_scf_cycles) CALL hf_scf_cycle(exit_state)
-
-        ENDIF
-
-        ! We've stopped iterating, so we build a new density
-        ! matrix from the final orbitals
-!       DO d = 1, n_domains
-!           CALL build_density_matrix(d)
-!       ENDDO
-
-        IF (.NOT.hf_converged) exit_state = 1
     END SUBROUTINE hf_scf_cycle
 
     REAL(dp) FUNCTION hf_energy(id, exit_state)
@@ -602,7 +485,7 @@ endif
                 WRITE (error_message,'(a)') &
                     & "Requested energy type not recognised"
                 CALL print_error("hf_energy", error_message)
-                IF (present(exit_state)) exit_state = 1
+                IF (present(exit_state).AND.exit_state.EQ.0) exit_state = 1
 
         END SELECT
 
@@ -909,9 +792,9 @@ endif
                 diis_matrix(i,j) = 0.d0
 
                 CALL DGEMM('N', 'T',                & ! TRANSA, TRANSB
-                    &functions_kept(d),             & ! M
-                    &functions_kept(d),             & ! N
-                    &functions_kept(d),             & ! K
+                    &orbitals_in_domain(d),         & ! M
+                    &orbitals_in_domain(d),         & ! N
+                    &orbitals_in_domain(d),         & ! K
                     &1.d0,                          & ! ALPHA
                     &hf_diis(d)%stored_error(:,:,i),& ! A
                     &functions_in_domain(d),        & ! LDA
@@ -958,10 +841,10 @@ endif
 
         REAL(dp), POINTER :: x_truncated(:,:)
 
-        x_truncated => hf_one_e(d)%x_matrix(:,1:functions_kept(d))
+        x_truncated => hf_one_e(d)%x_matrix(:,1:orbitals_in_domain(d))
 
         CALL DGEMM('T', 'N',            & ! TRANSA, TRANSB
-            &functions_kept(d),         & ! M
+            &orbitals_in_domain(d),     & ! M
             &functions_in_domain(d),    & ! N
             &functions_in_domain(d),    & ! K
             &1.d0,                      & ! ALPHA
@@ -975,7 +858,7 @@ endif
 
         CALL DGEMM('N', 'N',            & ! TRANSA, TRANSB
             &functions_in_domain(d),    & ! M
-            &functions_kept(d),         & ! N
+            &orbitals_in_domain(d),     & ! N
             &functions_in_domain(d),    & ! K
             &1.d0,                      & ! ALPHA
             &hf_work(d)%matrix(:,:,1),  & ! A
@@ -1010,7 +893,7 @@ endif
         SELECT CASE (conv_check_type)
             CASE (0) ! Max value in the current error matrix
                 max_error = maxval(abs(hf_diis(d)%stored_error(&
-                    &:functions_kept(d),:functions_kept(d),1)))
+                    &:orbitals_in_domain(d),:orbitals_in_domain(d),1)))
                 IF (near) THEN
                     check_convergence = max_error.LT.(10*scf_threshold)
                 ELSE
@@ -1019,13 +902,13 @@ endif
 
             CASE (1) ! RMS of the current error matrix
                 rms = 0.d0
-                DO i = 1, functions_kept(d)
-                    DO j = 1, functions_kept(d)
+                DO i = 1, orbitals_in_domain(d)
+                    DO j = 1, orbitals_in_domain(d)
                         rms = rms + hf_diis(d)%stored_error(i,j,1)**2
                     ENDDO
                 ENDDO
 
-                rms = sqrt(rms / functions_kept(d)**2)
+                rms = sqrt(rms / orbitals_in_domain(d)**2)
                 IF (near) THEN
                     check_convergence = rms.LT.(10*scf_threshold)
                 ELSE
@@ -1215,10 +1098,23 @@ endif
     SUBROUTINE print_hf_start
         IMPLICIT NONE
 
+        INTEGER d
+
         WRITE (*,"(6('='), (' '), a, (' '), 40('='))") "HARTREE-FOCK"
         WRITE (*,*)
+
+        WRITE (*,"(5(' '), ('--- '), a, (' ---'))") "LINEAR DEPENDENCE EFFECTS"
+        WRITE (*,"(2(' '), a, 4(' '), a, 4(' '), a)") &
+            & "Domain", "Functions", "Orbitals"
+        DO d = 1, n_domains
+            WRITE (*,"(4(' '), i2, 9(' '), i2, 11(' '), i2)") &
+                & d, functions_in_domain(d), orbitals_in_domain(d)
+        ENDDO
+
+        WRITE (*,*)
         WRITE (*,"(5(' '), ('--- '), a, (' ---'))") "START OF SCF"
-        WRITE (*,"(2(' '), a, 5(' '), a)") "Cycle", "Energy"
+        WRITE (*,"(2(' '), a, 13(' '), a, 18(' '), a)") &
+            & "Cycle", "Energy", "Convergence"
 
     END SUBROUTINE
 
@@ -1226,7 +1122,7 @@ endif
         IMPLICIT NONE
 
         INTEGER :: d, i, j
-        REAL :: error, rms
+        REAL(dp) :: error, rms
 
         SELECT CASE (conv_check_type)
             CASE (0) ! Max value in the current error matrix
@@ -1234,7 +1130,7 @@ endif
                 DO d = 1, n_domains
                     IF (electrons_in_domain(d).EQ.0) CYCLE
                     error = max(error, maxval(abs(hf_diis(d)%stored_error(&
-                        &:functions_kept(d),:functions_kept(d),1))))
+                        &:orbitals_in_domain(d),:orbitals_in_domain(d),1))))
                 ENDDO
 
             CASE (1) ! RMS of the current error matrix
@@ -1242,13 +1138,13 @@ endif
                 DO d = 1, n_domains
                     IF (electrons_in_domain(d).EQ.0) CYCLE
                     rms = 0.d0
-                    DO i = 1, functions_kept(d)
-                        DO j = 1, functions_kept(d)
+                    DO i = 1, orbitals_in_domain(d)
+                        DO j = 1, orbitals_in_domain(d)
                             rms = rms + hf_diis(d)%stored_error(i,j,1)**2
                         ENDDO
                     ENDDO
 
-                    rms = sqrt(rms / functions_kept(d)**2)
+                    rms = sqrt(rms / orbitals_in_domain(d)**2)
                     error = max(error, rms)
                 ENDDO
 

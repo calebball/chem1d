@@ -8,7 +8,7 @@ MODULE true_eri_exp
     ! exterior domain.
     !
     USE constants
-    USE input, ONLY : alpha, integral_check
+    USE input, ONLY : alpha
     USE error
     USE special_functions, ONLY : exp_incomplete_gamma
     USE one_e_integrals, ONLY : overlap_integral
@@ -74,38 +74,20 @@ MODULE true_eri_exp
                 DO s = 1, func_r
                     eta = l**2 + s**2
 
-                    IF (integral_check) THEN
-                        IF (integral.NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"integral variable not empty")
-                        ENDIF
-                    ENDIF
-
                     ! Compute integral value
-                    ! NOTE : Not sure how to get rid of this horrible
-                    ! IF block. The eta == zeta condition will trigger
-                    ! rarely when (m,n) != (l,s)
+                    ! NOTE: This IF block unfortunately remains
+                    ! The eta == zeta condition will trigger rarely
+                    ! when (m,n) != (l,s)
                     IF (eta.NE.zeta) THEN
-
                         integral = overlap_ll(m,n) * overlap_rr(l,s) * &
-            & ((alpha * zeta * eta) / (2.d0 * dble(zeta - eta)**5)) * &
-            & ((zeta**2 - eta**2) * (zeta**2 - 8.d0 * zeta * eta + eta**2) + &
-            &  12.d0 * zeta**2 * eta**2 * log(dble(zeta) / dble(eta)))
-
+                            & ((alpha * zeta * eta) / &
+                            &  (2.d0 * dble(zeta - eta)**5)) * &
+                            & ((zeta**2 - eta**2) * &
+                            &  (zeta**2 - 8.d0 * zeta * eta + eta**2) + &
+                            &  12.d0 * zeta**2 * eta**2 * log(dble(zeta) / dble(eta)))
                     ELSE
                         integral = overlap_ll(m,n) * overlap_rr(l,s) * &
                             & alpha * zeta / 5.d0
-                    ENDIF
-
-                    IF (integral_check) THEN
-                        IF (eri_llrr(m,n,l,s).NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"overlapping integrals found")
-                        ENDIF
-                        IF (eri_rrll(l,s,m,n).NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"overlapping integrals found")
-                        ENDIF
                     ENDIF
 
                     eri_llrr(m,n,l,s) = integral
@@ -140,16 +122,9 @@ MODULE true_eri_exp
                 DO s = 1, func_r
                     eta = l**2 + s**2
 
-                    IF (integral_check) THEN
-                        IF (integral.NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"integral variable not empty")
-                        ENDIF
-                    ENDIF
-
                     ! Compute integral value
-                    ! Not sure how to get rid of this horrible IF block
-                    ! The eta == zeta condition can trigger rarely when (m,n) != (l,s)
+                    ! Again, the IF block is here since the eta == zeta 
+                    ! condition can trigger rarely when (m,n) != (l,s)
                     IF (eta.NE.zeta) THEN
                         integral = overlap_ll(m,n) * overlap_rr(l,s) * &
                             & ((alpha * zeta * eta) / (2.d0 * dble(zeta - eta)**5)) * ( &
@@ -171,17 +146,6 @@ MODULE true_eri_exp
                             & (1.d0 - R * alpha * zeta ))) - &
                             & (R * alpha)**5 * zeta**3 * scratch(m,n))
 
-                    ENDIF
-
-                    IF (integral_check) THEN
-                        IF (eri_llrr(m,n,l,s).NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"overlapping integrals found")
-                        ENDIF
-                        IF (eri_rrll(l,s,m,n).NE.0.d0) THEN
-                            CALL print_error("true_llrr", &
-                                &"overlapping integrals found")
-                        ENDIF
                     ENDIF
 
                     eri_llrr(m,n,l,s) = integral
@@ -289,24 +253,12 @@ MODULE true_eri_exp
             DO i = 1, quad_points
                 x = (rma + i * h)
                 u(i) = x**2 * &
-!                    & exp_incomplete_gamma(-2, zeta * x)
                      & exp_incomplete_gamma(-2, zeta * x)
             ENDDO
 
             ! Loop over EE shell pairs
             DO l = 1, e
             DO s = 1, e
-
-                IF (integral_check) THEN
-                    IF (eri_LLEE(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                    IF (eri_EELL(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                ENDIF
 
                 ! Sum internal integrand points
                 eri_LLEE(m,n,l,s) = 0.d0
@@ -335,25 +287,6 @@ MODULE true_eri_exp
             ! Loop over EO shell pairs
             DO l = 1, e
             DO s = 1, o
-
-                IF (integral_check) THEN
-                    IF (eri_LLEO(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                    IF (eri_LLOE(m,n,s,l).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                    IF (eri_EOLL(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                    IF (eri_OELL(s,l,m,n).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                ENDIF
 
                 ! Sum internal integrand points
                 eri_LLEO(m,n,l,s) = 0.d0
@@ -385,17 +318,6 @@ MODULE true_eri_exp
             ! Loop over OO shell pairs
             DO l = 1, o
             DO s = 1, o
-
-                IF (integral_check) THEN
-                    IF (eri_LLOO(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                    IF (eri_OOLL(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("true_llee", &
-                            &"overlapping integrals found")
-                    ENDIF
-                ENDIF
 
                 ! Sum internal integrand points
                 eri_LLOO(m,n,l,s) = 0.d0

@@ -13,18 +13,16 @@ MODULE input
              & max_scf_cycles, &
              & conv_check_type, &
              & diis_length, &
-             & primary_basis_th, secondary_basis_th, &
              & scan_length, scan_type, &
              & matrix_vec_length
     REAL(dp) :: alpha, scf_threshold, basis_threshold, scan_step
     LOGICAL  :: input_set, default_input, print_orbitals, scan_job
     LOGICAL  :: debug = .FALSE.
-    LOGICAL, PARAMETER :: integral_check = .FALSE.
 
     INTEGER, TARGET, ALLOCATABLE :: nuclear_charge(:), &
                                   & electrons_in_domain(:), &
                                   & functions_in_domain(:), &
-                                  & functions_kept(:), &
+                                  & orbitals_in_domain(:), &
                                   & evens_in_domain(:), odds_in_domain(:), &
                                   & evens_kept(:), odds_kept(:), &
                                   & start_of_domain(:), end_of_domain(:)
@@ -59,6 +57,7 @@ MODULE input
         !       (in static storage)
         !   5 = Insufficient temporary input
         !       to fill static storage
+        !   6 = Fatal option set
         !
         IMPLICIT NONE
 
@@ -99,19 +98,19 @@ MODULE input
 
         ! Default option values
         scf_threshold = 1.0e-6
-        basis_threshold = 1.0e-6
+        basis_threshold = 1.0e-7
         max_scf_cycles = 20
         print_orbitals = .FALSE.
+        basis = 6
         exps = 0
         evens = 0
         odds = 0
         alpha = 0.d0
-        conv_check_type = 0
+        conv_check_type = 1
         diis_length = 4
-        primary_basis_th = 0
-        secondary_basis_th = 0
         scan_length = 0
         scan_step = 0.d0
+        scan_type = 0
         scan_job = .FALSE.
 
         ! Setup linked lists for temporarily storing
@@ -246,21 +245,61 @@ MODULE input
 
             ELSEIF (option.EQ."basis") THEN
                 basis = int(value)
+                IF (basis.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set basis to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."exps") THEN
                 exps = int(value)
+                IF (exps.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set exps to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."evens") THEN
                 evens = int(value)
+                IF (evens.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set evens to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."odds") THEN
                 odds = int(value)
+                IF (odds.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set odds to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."alpha") THEN
                 alpha = value
 
             ELSEIF (option.EQ."maxscf") THEN
                 max_scf_cycles = int(value)
+                IF (max_scf_cycles.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set maxscf to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."p_orb") THEN
                 IF (int(value).NE.0) print_orbitals = .TRUE.
@@ -271,37 +310,69 @@ MODULE input
             ELSEIF (option.EQ."bas_th") THEN
                 basis_threshold = 10.d0**(-value)
 
-            ELSEIF (option.EQ."pb_th") THEN
-                primary_basis_th = int(value)
-
-            ELSEIF (option.EQ."sb_th") THEN
-                secondary_basis_th = int(value)
-
             ELSEIF (option.EQ."check") THEN
                 conv_check_type = int(value)
+                IF ((conv_check_type.NE.0).AND.(conv_check_type.NE.1)) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "check must be set to 0 or 1", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."diis") THEN
                 diis_length = int(value)
+                IF (diis_length.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set diis to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."scanlength") THEN
                 scan_length = int(value)
+                IF (scan_length.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "Attempting to set scanlength to a non-positive number", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."scanstep") THEN
                 scan_step = value
 
             ELSEIF (option.EQ."scantype") THEN
                 scan_type = int(value)
+                IF (scan_type.LE.0) THEN
+                    WRITE (error_message,'(a, a, i2)') &
+                        & "scantype must be set to 0 or 1", &
+                        & " on line ", line
+                    CALL print_error("read_input", error_message)
+                    exit_state = 6
+                    RETURN
+                ENDIF
 
             ELSEIF (option.EQ."scannuc") THEN
                 IF (int(value).GT.0.AND.int(value).LE.n_nuclei) THEN
                     scanning_nucleus(int(value)) = .TRUE.
-                ENDIF ! WARNING : There should be an error catch here
+                ELSE
+                    WRITE (error_message,'(a, i4)') &
+                        & "Attempting to scan non existent nucleus on line ", &
+                        & line
+                    CALL print_warning("read_input", error_message)
+                ENDIF
+                IF (exit_state.EQ.0) exit_state = 1
 
             ELSE
                 WRITE (error_message,'(a, i4)') &
                     & "Unrecognised option on line ", line
                 CALL print_warning("read_input", error_message)
-                exit_state = 1
+                IF (exit_state.EQ.0) exit_state = 1
             ENDIF
 
         ENDDO
@@ -313,11 +384,28 @@ MODULE input
             scan_job = scan_job.OR.scanning_nucleus(i)
         ENDDO
         IF (scan_job) THEN
-            IF (scan_length.LE.0.OR.scan_step.EQ.0.d0) scan_job = .FALSE.
+            IF (scan_length.LE.0) THEN
+                WRITE (error_message,'(a)') &
+                    & "scannuc has been set but scanlength is 0"
+                CALL print_error("read_input", error_message)
+                exit_state = 6
+                RETURN
+            ENDIF
+
+            IF (scan_step.EQ.0.d0) THEN
+                WRITE (error_message,'(a)') &
+                    & "scannuc has been set but scanstep is 0"
+                CALL print_error("read_input", error_message)
+                exit_state = 6
+                RETURN
+            ENDIF
         ELSE
-            IF (scan_length.GT.0.AND.scan_step.NE.0.d0) THEN
-                scan_job = .TRUE.
-                FORALL (i = 1:n_nuclei) scanning_nucleus(i) = .TRUE.
+            IF (scan_length.GT.0.OR.scan_step.NE.0.d0) THEN
+                WRITE (error_message,'(a)') &
+                    & "scannuc must be set to perform a scan"
+                CALL print_error("read_input", error_message)
+                exit_state = 6
+                RETURN
             ENDIF
         ENDIF
 
@@ -330,9 +418,9 @@ MODULE input
                 & functions_in_domain(n_domains), &
                 & evens_in_domain(n_domains),     &
                 & odds_in_domain(n_domains),      &
-                & functions_kept(n_domains), &
-                & evens_kept(n_domains),     &
-                & odds_kept(n_domains),      &
+                & orbitals_in_domain(n_domains),      &
+                & evens_kept(n_domains),          &
+                & odds_kept(n_domains),           &
                 & start_of_domain(n_domains),     &
                 & end_of_domain(n_domains),       &
                 & STAT=stat                       )
@@ -358,7 +446,7 @@ MODULE input
                 CALL print_warning("read_input", error_message)
                 ! This probably isn't fatal, since all the static
                 ! data must be full
-                exit_state = 1
+                IF (exit_state.EQ.0) exit_state = 1
             ENDIF
 
             electrons_in_domain(i) = dll_curr%electrons
@@ -367,18 +455,14 @@ MODULE input
                 IF (i.GT.1.AND.i.LT.n_domains) THEN
                     IF (evens.GT.0) THEN
                         evens_in_domain(i) = evens
-                    ELSEIF (odds.GT.0) THEN
-                        evens_in_domain(i) = max(0, basis - odds)
                     ELSE
-                        evens_in_domain(i) = ceiling(dble(basis)/2.d0)
+                        evens_in_domain(i) = basis
                     ENDIF
 
                     IF (odds.GT.0) THEN
                         odds_in_domain(i) = odds
-                    ELSEIF (evens.GT.0) THEN
-                        evens = max(0, basis - evens)
                     ELSE
-                        odds_in_domain(i) = floor(dble(basis)/2.d0)
+                        odds_in_domain(i) = basis
                     ENDIF
 
                     functions_in_domain(i) = evens_in_domain(i) + &
@@ -442,7 +526,7 @@ MODULE input
                 CALL print_warning("read_input", error_message)
                 ! This probably isn't fatal, since all the static
                 ! data must be full
-                exit_state = 1
+                IF (exit_state.EQ.0) exit_state = 1
             ENDIF
 
             nuclear_charge(i) = nll_curr%charge
@@ -466,7 +550,7 @@ MODULE input
         ! Compute the remaining input
         i = 0
         DO d = 1, n_domains
-            functions_kept(d) = functions_in_domain(d)
+            orbitals_in_domain(d) = functions_in_domain(d)
             start_of_domain(d) = i + 1
             end_of_domain(d) = i + functions_in_domain(d)
             i = i + functions_in_domain(d)
@@ -542,80 +626,6 @@ MODULE input
 
     END FUNCTION element_to_charge
 
-    SUBROUTINE set_default_input(exit_state)
-        !
-        ! This subroutine intialises a set of default
-        ! input instructions
-        !
-        ! OUTPUT :
-        !   [int ] exit_state
-        ! Describes the exit condition of the routine
-        !   0 = Procedure terminated successfully
-        !   1 = Non-fatal error encountered
-        !   2 = Fatal memory allocation error
-        !
-        IMPLICIT NONE
-
-        INTEGER, INTENT(OUT) :: exit_state
-
-        INTEGER :: d, i, stat
-        CHARACTER(LEN=58) :: error_message
-
-        scf_threshold = 1.0e-6
-        max_scf_cycles = 20
-
-        n_nuclei = 2
-        n_domains = n_nuclei + 1
-        ALLOCATE( nuclear_position(n_nuclei),     &
-                & nuclear_charge(n_nuclei),       &
-                & electrons_in_domain(n_domains), &
-                & functions_in_domain(n_domains), &
-                & evens_in_domain(n_domains),     &
-                & odds_in_domain(n_domains),      &
-                & start_of_domain(n_domains),     &
-                & end_of_domain(n_domains),       &
-                & STAT=stat                       )
-
-        IF (stat.NE.0) THEN
-            WRITE (error_message,'(a)') &
-                & "Could not allocate memory"
-            CALL print_error("default_input", error_message)
-            exit_state = 2
-            RETURN
-        ENDIF
-
-        nuclear_position(1) = 0d0
-        nuclear_position(2) = 2.639d0
-        nuclear_charge(1) = 2
-        nuclear_charge(2) = 1
-
-        electrons_in_domain(1) = 1
-        electrons_in_domain(2) = 1
-        electrons_in_domain(3) = 0
-
-        functions_in_domain(1) = 8
-        functions_in_domain(2) = 8
-        functions_in_domain(3) = 0
-
-        evens_in_domain(2) = 4
-
-        odds_in_domain(2)  = 4
-
-        i = 0
-        DO d = 1, n_domains
-            start_of_domain(d) = i + 1
-            end_of_domain(d) = i + functions_in_domain(d)
-            i = i + functions_in_domain(d)
-        ENDDO
-
-        alpha = dble(sum(nuclear_charge)) / &
-            & dble(max(functions_in_domain(1), functions_in_domain(n_domains))**2)
-
-        input_set = .TRUE.
-        default_input = .TRUE.
-
-    END SUBROUTINE set_default_input
-
     SUBROUTINE clean_up_input(exit_state)
         !
         ! This subroutine deallocates the input storage
@@ -639,7 +649,7 @@ MODULE input
             WRITE (error_message,'(a)') &
                 & "Input is not currently set"
             CALL print_warning("clean_up_input", error_message)
-            exit_state = 1
+            IF (exit_state.EQ.0) exit_state = 1
             RETURN
         ENDIF
 
@@ -667,53 +677,102 @@ MODULE input
 
     END SUBROUTINE clean_up_input
 
-    SUBROUTINE print_input(from_file, file_name)
+    SUBROUTINE print_input(file_name)
         !
         ! This subroutine writes the current input data
         ! to standard out
         !
         ! INPUT :
-        !   [bool] from_file
-        !       Has the input been read from a file, or
-        !       is it the default input
-        !   [char] file_name            (OPTIONAL)
+        !   [char] file_name
         !       Name of the input file
         !
         IMPLICIT NONE
 
-        LOGICAL, INTENT(IN) :: from_file
-        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: file_name
+        CHARACTER(LEN=*), INTENT(IN) :: file_name
 
         INTEGER :: i
 
         WRITE (*,"(6('='), (' '), a, (' '), 47('='))") "INPUT"
         WRITE (*,*)
-        IF (from_file) THEN
-            WRITE (*,"(2(' '), ('Reading input from : '), a)") file_name
-        ELSE
-            WRITE (*,"(2(' '), &
-                & ('No input file supplied, using default settings'))")
-        ENDIF
+        WRITE (*,"(2(' '), ('Reading input from : '), a)") file_name
 
         WRITE (*,*)
-        WRITE (*,"(5(' '), ('--- '), a (' ---'))") "MOLECULE"
+
+        ! Molecule specification
+        WRITE (*,"(5(' '), ('--- '), a, (' ---'))") "MOLECULE"
         WRITE (*,"(2(' '), a)") "Electrons"
         WRITE (*,"(3(' '), a, 6(' '), a)") "Nucleus", "Position"
 
         DO i = 1, n_nuclei
             WRITE (*,"(6(' '), i2)") electrons_in_domain(i)
             WRITE (*,"(6(' '), a, 8(' '), F8.3)") name_of_nucleus(i), &
-                                                 & nuclear_position(i)
+                                                & nuclear_position(i)
         ENDDO
         WRITE (*,"(6(' '), i2)") electrons_in_domain(n_domains)
 
         WRITE (*,*)
         WRITE (*,"(5(' '), ('--- '), a, (' ---'))") "OPTIONS"
+
+        ! Basis set options
         WRITE (*,"(2(' '), a, (' : '), i4)") &
+            & "Exponential functions", functions_in_domain(1)
+        IF (n_domains.GT.2) THEN
+            WRITE (*,"(2(' '), a, ('       : '), i4)") &
+                & "Evens functions", evens_in_domain(2)
+            WRITE (*,"(2(' '), a, ('        : '), i4)") &
+                & "Odds functions", odds_in_domain(2)
+        ENDIF
+        WRITE (*,"(2(' '), a, ('                 : '), F10.6)") &
+            & "Alpha", alpha
+
+        WRITE (*,*)
+
+        ! Geometry scan options
+        IF (scan_job) THEN
+            WRITE (*,"(2(' '), a)") &
+                & "Running a geometry scan"
+            WRITE (*,"(2(' '), a)") &
+                & "Moving the following nuclei"
+            DO i = 1, n_nuclei
+                IF (scanning_nucleus(i)) WRITE (*,"(6(' '), i2)") &
+                    & i
+            ENDDO
+            WRITE (*,"(2(' '), a, ' : ', i6)") &
+                & "Number of steps", scan_length
+            WRITE (*,"(2(' '), a, ' : ', F7.4)") &
+                & "Step length", scan_step
+            WRITE (*,*)
+            IF (scan_type.EQ.1) THEN
+                WRITE (*,"(2(' '), a)") &
+                    & "Resetting orbitals for each step"
+            ENDIF
+        ENDIF
+
+        ! Other variables
+        WRITE (*,"(2(' '), a, ('          : '), i4)") &
             & "Maximum SCF cycles", max_scf_cycles
-        WRITE (*,"(2(' '), a, ('    : '), i4, (' ('), i4, (','), i4, (')'))") &
-            & "Basis functions", functions_in_domain(2), evens_in_domain(2), &
-            & odds_in_domain(2)
+        WRITE (*,"(2(' '), a, ('          : '), i4)") &
+            & "DIIS memory length", diis_length
+        WRITE (*,"(2(' '), a, ('   : '), es7.1)") &
+            & "SCF convergence threshold", scf_threshold
+        WRITE (*,"(2(' '), a, (' : '), es7.1)") &
+            & "Linear dependence threshold", basis_threshold
+
+        WRITE (*,*)
+
+        ! Discrete options
+        IF (conv_check_type.EQ.0) THEN
+            WRITE (*,"(2(' '), a, a, a)") &
+                & "Checking ", &
+                & "max element of error matrix", &
+                & " for SCF convergence"
+        ELSEIF (conv_check_type.EQ.1) THEN
+            WRITE (*,"(2(' '), a, a, a)") &
+                & "Checking ", &
+                & "RMS of error matrix", &
+                & " for SCF convergence"
+        ENDIF
+
         IF (print_orbitals) THEN
             WRITE (*,"(2(' '), a)") &
                 & "Printing occupied HF orbitals"

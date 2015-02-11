@@ -8,7 +8,6 @@ PROGRAM chem1d
                              & hf_in_domain
     USE eri,            ONLY : build_eri,            &
                              & mo_eri_transform
-!                            & build_mo_double_bar
     USE hartree_fock,   ONLY : init_hartree_fock,    &
                              & clean_up_hf,          &
                              & hf_one_electron,      &
@@ -26,9 +25,7 @@ PROGRAM chem1d
     REAL(sp) :: cpu_time_start, cpu_time_finish
     INTEGER :: sys_clock_start, sys_clock_finish, sys_clock_rate
     INTEGER :: step, nucleus
-integer :: d, i, j
-integer :: stepa, stepb
-real(dp) :: start(3)
+    INTEGER :: d, i, j
 
     CALL cpu_time(cpu_time_start)
     CALL system_clock(sys_clock_start, sys_clock_rate)
@@ -55,14 +52,12 @@ real(dp) :: start(3)
             CALL print_warning("chem1d", "Could not close input channel")
         ENDIF
 
-        CALL print_input(.TRUE., trim(in_file))
+        CALL print_input(trim(in_file))
 
     ELSE
 
-        CALL set_default_input(stat)
-        IF (stat.GT.1) STOP
-
-        CALL print_input(.FALSE.)
+        CALL print_error("chem1d", "No input file supplied")
+        STOP
 
     ENDIF
 
@@ -70,108 +65,57 @@ real(dp) :: start(3)
     CALL init_storage(stat)
     IF (stat.GT.1) STOP
 
+    ! Are we scanning some geometry parameter?
     IF (scan_job) THEN
         CALL print_scan_start
 
         CALL init_hartree_fock(stat)
         IF (stat.GT.1) STOP
 
+        DO step = 0, scan_length
 
-        IF (scan_type.NE.2) THEN
-
-            DO step = 0, scan_length
-
-                ! Move geometry
-                IF (step.NE.0) THEN
-                    DO nucleus = 2, n_nuclei
-                        IF (scanning_nucleus(nucleus)) THEN
-                            DO i = nucleus, n_nuclei
-                                nuclear_position(i) = nuclear_position(i) + &
-                                    & scan_step
-                            ENDDO
-                        ENDIF
-                    ENDDO
-                ENDIF
-                curr_hf_cycle = 0
-
-                IF (scan_type.eq.1) THEN ! Start from initial orbital guess
-                    DO d = 1, n_domains
-                        DO i = 1, functions_in_domain(d)
-                        DO j = 1, functions_in_domain(d)
-                            hf_in_domain(d)%orbitals(i,j) = 0.d0
-                            hf_in_domain(d)%density(i,j) = 0.d0
+            ! Move geometry
+            IF (step.NE.0) THEN
+                DO nucleus = 2, n_nuclei
+                    IF (scanning_nucleus(nucleus)) THEN
+                        DO i = nucleus, n_nuclei
+                            nuclear_position(i) = nuclear_position(i) + &
+                                & scan_step
                         ENDDO
-                        ENDDO
+                    ENDIF
+                ENDDO
+            ENDIF
+            curr_hf_cycle = 0
+
+            IF (scan_type.eq.1) THEN ! Start from initial orbital guess
+                DO d = 1, n_domains
+                    DO i = 1, functions_in_domain(d)
+                    DO j = 1, functions_in_domain(d)
+                        hf_in_domain(d)%orbitals(i,j) = 0.d0
+                        hf_in_domain(d)%density(i,j) = 0.d0
                     ENDDO
-                ENDIF
+                    ENDDO
+                ENDDO
+            ENDIF
 
-                CALL populate_one_e_matrices
+            CALL populate_one_e_matrices
 
-                ! Build ERI arrays
-                CALL build_eri(stat)
-                IF (stat.GT.1) STOP
+            ! Build ERI arrays
+            CALL build_eri(stat)
+            IF (stat.GT.1) STOP
 
-                ! Setup and run a HF calculation
-                CALL hf_one_electron(stat)
-                IF (stat.GT.1) STOP
-                CALL hf_scf_cycle(stat)
-                IF (stat.GT.1) STOP
+            ! Setup and run a HF calculation
+            CALL hf_one_electron(stat)
+            IF (stat.GT.1) STOP
+            CALL hf_scf_cycle(stat)
+            IF (stat.GT.1) STOP
 
-!               DO d = 1, n_domains
-!               DO i = 1, functions_in_domain(d)
-!               DO j = functions_kept(d) + 1, functions_in_domain(d)
-!                   hf_in_domain(d)%orbitals(i,j) = 0.d0
-!               ENDDO
-!               ENDDO
-!               ENDDO
+            CALL print_scan_step(step)
 
-                ! Transform ERIs to MO basis
-!               CALL mo_eri_transform(stat)
-!               IF (stat.GT.1) STOP
-!               CALL build_mo_double_bar
+        ENDDO
 
-                ! Run MP2 and MP3 correlation calculations
-!               CALL compute_mp2
-!               CALL compute_mp3
+    ELSE ! We're just doing a normal calculation
 
-                CALL print_scan_step(step)
-
-            ENDDO
-
-        ELSE ! Two dimension scan
-
-            start = nuclear_position
-
-            DO stepa = 0, scan_length
-            DO stepb = 0, scan_length
-
-                nuclear_position(2) = start(2) + stepa * scan_step
-                nuclear_position(3) = start(3) + (stepa + stepb) * scan_step
-                curr_hf_cycle = 0
-
-                CALL populate_one_e_matrices
-
-                ! Build ERI arrays
-                CALL build_eri(stat)
-                IF (stat.GT.1) STOP
-
-                ! Setup and run a HF calculation
-                CALL hf_one_electron(stat)
-                IF (stat.GT.1) STOP
-                CALL hf_scf_cycle(stat)
-                IF (stat.GT.1) STOP
-
-                CALL print_scan_step(step)
-
-            ENDDO
-            WRITE (*,*)
-            ENDDO
-
-        ENDIF
-
-!       CALL clean_up_hf(stat)
-        CALL print_scan_end
-    ELSE
         CALL populate_one_e_matrices
 
         ! Build ERI arrays
@@ -189,18 +133,17 @@ real(dp) :: start(3)
 
         CALL print_hf_end
 
-DO d = 1, n_domains
-DO i = 1, functions_in_domain(d)
-DO j = functions_kept(d) + 1, functions_in_domain(d)
-    hf_in_domain(d)%orbitals(i,j) = 0.d0
-ENDDO
-ENDDO
-ENDDO
+!DO d = 1, n_domains
+!DO i = 1, functions_in_domain(d)
+!DO j = functions_kept(d) + 1, functions_in_domain(d)
+!    hf_in_domain(d)%orbitals(i,j) = 0.d0
+!ENDDO
+!ENDDO
+!ENDDO
 
         ! Transform ERIs to MO basis
         CALL mo_eri_transform(stat)
         IF (stat.GT.1) STOP
-!       CALL build_mo_double_bar
 
         ! Run MP2 and MP3 correlation calculations
         CALL compute_mp2

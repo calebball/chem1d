@@ -52,19 +52,6 @@ MODULE eri
         REAL(dp) :: A, B, R, max_integral
         CHARACTER(LEN=58) :: error_message
 
-        IF (integral_check) THEN
-            WRITE (*,*) "Checking integrals"
-
-            DO d1 = 1, n_domains
-            DO d2 = 1, n_domains
-                FORALL (m=1:functions_in_domain(d1),n=1:functions_in_domain(d1),&
-                       &l=1:functions_in_domain(d2),s=1:functions_in_domain(d2))
-                    eri_of_domain(d1)%with(d2)%integral(m,n,l,s) = 0.d0
-                END FORALL
-            ENDDO
-            ENDDO
-        ENDIF
-
         max_m = 0
         DO d = 1, n_domains
             max_m = max(max_m, 2 * evens_in_domain(d), &
@@ -72,6 +59,7 @@ MODULE eri
         ENDDO
         max_m = max_m + 1
 
+        ! Build scratch space for integrals
         IF (.NOT.allocated(scratch_matrix)) THEN
             ALLOCATE(scratch_matrix(-1:max_m,-1:max_m),STAT=stat)
             FORALL (m = -1:max_m, n = -1:max_m)
@@ -96,21 +84,8 @@ MODULE eri
         ! Handle the exterior domains seperately to avoid
         ! IF blocks within loops
         d1 = 1
-        ! Quasi-integrals (LLLL)
-        IF (integral_check) THEN
-            DO m = 1, functions_in_domain(d1)
-            DO n = 1, functions_in_domain(d1)
-            DO l = 1, functions_in_domain(d1)
-            DO s = 1, functions_in_domain(d1)
-                IF (eri_of_domain(d1)%with(d1)%integral(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("eri", "overlapping integral in LLLL")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
+        ! Quasi-integrals (LLLL)
         CALL quasi_llll(functions_in_domain(1), alpha, &
                        &one_e_in_domain(1)%overlap, &
                        &eri_of_domain(1)%with(1)%integral)
@@ -122,22 +97,6 @@ MODULE eri
 
             ! Call the routine which will compute and pack up
             ! all the integrals
-            IF (integral_check) THEN
-                DO m = 1, functions_in_domain(d1)
-                DO n = 1, functions_in_domain(d1)
-                DO l = 1, functions_in_domain(d2)
-                DO s = 1, functions_in_domain(d2)
-                    IF (eri_of_domain(d1)%with(d2)%integral(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("eri", "overlapping integral in LLPP")
-                    ENDIF
-                    IF (eri_of_domain(d2)%with(d1)%integral(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("eri", "overlapping integral in PPLL")
-                    ENDIF
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-            ENDIF
 
             CALL true_llee(.TRUE., A, R, evens_in_domain(d2), odds_in_domain(d2), &
                           &functions_in_domain(d1), &
@@ -155,22 +114,6 @@ MODULE eri
 
         ! Call the routine which will compute and pack up
         ! all the integrals
-        IF (integral_check) THEN
-            DO m = 1, functions_in_domain(d1)
-            DO n = 1, functions_in_domain(d1)
-            DO l = 1, functions_in_domain(d2)
-            DO s = 1, functions_in_domain(d2)
-                IF (eri_of_domain(d1)%with(d2)%integral(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("eri", "overlapping integral in LLRR")
-                ENDIF
-                IF (eri_of_domain(d2)%with(d1)%integral(l,s,m,n).NE.0.d0) THEN
-                    CALL print_error("eri", "overlapping integral in RRLL")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         CALL true_llrr(R, functions_in_domain(d1), functions_in_domain(d2), &
                       &one_e_in_domain(d1)%overlap, &
@@ -181,19 +124,6 @@ MODULE eri
 
         ! Quasi-integrals (RRRR)
         d1 = n_domains
-        IF (integral_check) THEN
-            DO m = 1, functions_in_domain(d1)
-            DO n = 1, functions_in_domain(d1)
-            DO l = 1, functions_in_domain(d1)
-            DO s = 1, functions_in_domain(d1)
-                IF (eri_of_domain(d1)%with(d1)%integral(m,n,l,s).NE.0.d0) THEN
-                    CALL print_error("eri", "overlapping integral in RRRR")
-                ENDIF
-            ENDDO
-            ENDDO
-            ENDDO
-            ENDDO
-        ENDIF
 
         CALL quasi_llll(functions_in_domain(d1), alpha, &
                        &one_e_in_domain(d1)%overlap, &
@@ -206,22 +136,6 @@ MODULE eri
 
             ! Call the routine which will compute and pack up
             ! all the integrals
-            IF (integral_check) THEN
-                DO m = 1, functions_in_domain(d1)
-                DO n = 1, functions_in_domain(d1)
-                DO l = 1, functions_in_domain(d2)
-                DO s = 1, functions_in_domain(d2)
-                    IF (eri_of_domain(d1)%with(d2)%integral(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("eri", "overlapping integral in RRPP")
-                    ENDIF
-                    IF (eri_of_domain(d2)%with(d1)%integral(l,s,m,n).NE.0.d0) THEN
-                        CALL print_error("eri", "overlapping integral in PPRR")
-                    ENDIF
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-            ENDIF
 
             CALL true_llee(.FALSE., A, R, evens_in_domain(d2), odds_in_domain(d2), &
                           &functions_in_domain(d1), &
@@ -235,23 +149,10 @@ MODULE eri
 
         ! Now compute the interactions between finite
         ! domains
+
         DO d1 = 2, n_domains - 1
             ! Quasi-integrals
             A = (nuclear_position(d1) - nuclear_position(d1 - 1)) / 2
-            IF (integral_check) THEN
-                DO m = 1, functions_in_domain(d1)
-                DO n = 1, functions_in_domain(d1)
-                DO l = 1, functions_in_domain(d1)
-                DO s = 1, functions_in_domain(d1)
-                    IF (eri_of_domain(d1)%with(d1)%integral(m,n,l,s).NE.0.d0) THEN
-                        CALL print_error("eri", "overlapping integral in quasi PPPP")
-                    ENDIF
-                ENDDO
-                ENDDO
-                ENDDO
-                ENDDO
-            ENDIF
-
 
             CALL quasi_poly(A, evens_in_domain(d1), odds_in_domain(d1), &
                            &one_e_in_domain(d1)%overlap, &
@@ -272,22 +173,6 @@ MODULE eri
 
                 ! Call the routine which will compute and pack up
                 ! all the integrals
-                IF (integral_check) THEN
-                    DO m = 1, functions_in_domain(d1)
-                    DO n = 1, functions_in_domain(d1)
-                    DO l = 1, functions_in_domain(d2)
-                    DO s = 1, functions_in_domain(d2)
-                        IF (eri_of_domain(d1)%with(d2)%integral(m,n,l,s).NE.0.d0) THEN
-                            CALL print_error("eri", "overlapping integral in true PPPP")
-                        ENDIF
-                        IF (eri_of_domain(d2)%with(d1)%integral(l,s,m,n).NE.0.d0) THEN
-                            CALL print_error("eri", "overlapping integral in true PPPP")
-                        ENDIF
-                    ENDDO
-                    ENDDO
-                    ENDDO
-                    ENDDO
-                ENDIF
 
                 CALL true_eeee(A, B, R, &
                               &evens_in_domain(d1), odds_in_domain(d1),     &
