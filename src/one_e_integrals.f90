@@ -369,12 +369,12 @@ MODULE one_e_integrals
 
                 !Calculate potential of adjacent nucleus
                 Z = nuclear_charge(dom_nuc)
-               
+
                 !Top of Matrix
                 FORALL (i=1:functions_in_domain(domain), &
                     & j=1:functions_in_domain(domain), i >= j)
                     
-                    integrals(i,j) = integrals(i,j) + (alpha * j * (j + 1d0)) / &
+                    integrals(i,j) = integrals(i,j) + Z * (alpha * j * (j + 1d0)) / &
                     & sqrt(i * (i + 1d0) * j * (j + 1d0))
 
                 END FORALL
@@ -383,7 +383,7 @@ MODULE one_e_integrals
                 FORALL (i=1:functions_in_domain(domain), &
                     & j=1:functions_in_domain(domain), j > i)
                    
-                    integrals(i,j) = integrals(i,j) + (alpha * i * (i + 1d0)) / &
+                    integrals(i,j) = integrals(i,j) + Z * (alpha * i * (i + 1d0)) / &
                     & sqrt(i * (i + 1d0) * j * (j + 1d0))
 
                 END FORALL
@@ -404,14 +404,13 @@ MODULE one_e_integrals
                     !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
                     DO k = other_nuc, dom_nuc + 1, -1 
 
-                        WRITE(*,*) "Left Exterior Iterator"
-
                         !Set new nuclei position argument
-                        R = 2d0 * alpha * (nuclear_position(other_nuc) - nuclear_position(dom_nuc))
+                        R = 2d0 * alpha * (nuclear_position(k) - nuclear_position(dom_nuc))
+                        Z = nuclear_charge(k)
                         
                         DO i = 1 , functions_in_domain(domain)
                             DO j = 1 , functions_in_domain(domain)
-                                integrals(i,j) = integrals(i,j) + exterior_potential_other(i,j,R)
+                                integrals(i,j) = integrals(i,j) + Z * exterior_potential_other(i,j,R)
                             END DO
                         END DO
 
@@ -426,14 +425,14 @@ MODULE one_e_integrals
                     !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
                     DO k = other_nuc, dom_nuc - 1, 1 
 
-                        WRITE(*,*) "Right Exterior Iterator"
-
                         !Set new nuclei position argument
-                        R = 2d0 * alpha * (nuclear_position(dom_nuc) - nuclear_position(other_nuc))
+                        R = 2d0 * alpha * (nuclear_position(dom_nuc) - nuclear_position(k))
+                        Z = nuclear_charge(k)
 
                         DO i = 1 , functions_in_domain(domain)
                             DO j = 1 , functions_in_domain(domain)
-                                integrals(i,j) = integrals(i,j) + exterior_potential_other(i,j,R)
+                                WRITE(*,*) "Right Exterior Iterator"
+                                integrals(i,j) = integrals(i,j) + k * exterior_potential_other(i,j,R)
                             END DO
                         END DO
 
@@ -445,10 +444,6 @@ MODULE one_e_integrals
 
         !Interior Domains
         ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
-            
-            !Number of Nuclei to Left/Right of specified domain NOT including adjacent
-            left_nuc = domain - 2
-            right_nuc = n_domains - domain - 1
 
             !Adjacent Case
             !Set Adjacent Nuclei Positions
@@ -458,12 +453,15 @@ MODULE one_e_integrals
             DO i = 1, functions_in_domain(domain)
                 DO j = 1, functions_in_domain(domain)
 
-                
                     integrals(i,j) = (cin(PI * (i + j)) - cin(PI * (i - j))) &
                                    & / (B - A)
                 
                 END DO
             END DO
+
+            !Number of Nuclei to Left/Right of specified domain NOT including adjacent
+            left_nuc = domain - 2
+            right_nuc = domain + 1
 
             !Leftward Case
             DO k = left_nuc, 1, -1
