@@ -9,7 +9,9 @@ MODULE one_e_integrals
     USE constants
     USE input
     USE error
-    USE special_functions, ONLY : incomplete_gamma, exp_incomplete_gamma, two_f_one
+    USE special_functions, ONLY : incomplete_gamma, &
+    & exp_incomplete_gamma, two_f_one, cin, si, log_im
+    USE fgsl
 
     IMPLICIT NONE
 
@@ -20,6 +22,7 @@ MODULE one_e_integrals
     PUBLIC :: potential_int_in_domain
 
     CONTAINS
+
 
     SUBROUTINE overlap_int_in_domain(domain, integrals)
         !
@@ -43,68 +46,30 @@ MODULE one_e_integrals
         REAL(dp) :: coeff
         CHARACTER(LEN=58) :: error_message
 
-        IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
+        !Test Variables
+        REAL(dp) :: input
+        REAL(dp) :: result
 
-            ! We compute these integrals from an easy to evaluate
-            ! analytic expression
-            FORALL(i = 1:functions_in_domain(domain), &
-                  &j = 1:functions_in_domain(domain))
-                integrals(i,j) = (dble(2 * i * j) / dble(i**2 + j**2))**3
-            END FORALL
 
-        ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
-            ! NOTE : A better way to do this would be to build an
-            !        identity matrix and then use recur from the
-            !        diagonal to build the rest
+        !Initializing the matrix to zero
+        FORALL (i = 1 : functions_in_domain(domain), &
+                & j = 1 : functions_in_domain(domain))
 
-            n_evens = evens_in_domain(domain)
-            n_odds  = odds_in_domain(domain)
+            integrals(i,j) = 0
 
-            ! The analytic expressions for these integrals are in
-            ! terms of ratios of gamma functions.
-            ! We're going to compute them recursively.
-            IF (functions_in_domain(domain).GT.0) integrals(1,1) = 1.d0
-            IF (n_odds.GT.0) integrals(n_evens+1,n_evens+1) = 1.d0
+        END FORALL
 
-            DO i = 2, n_evens
-                coeff = dble(i + 1) / dble(6 + 4*i)
-                coeff = coeff * dsqrt( dble(2 - 32 * i**2) / &
-                      &                dble( i - 2 * i**2) )
-                integrals(i,1) = coeff * integrals(i-1,1)
-            ENDDO
+        !Filling the identity matrix
+        FORALL (i = 1 : functions_in_domain(domain))
 
-            DO i = 2, n_odds
-                coeff = dble(2 * i + 2) / dble(5 + 2 * i)
-                coeff = coeff * dsqrt( dble(3 + 16 * (i + i**2)) / &
-                      &                dble(16 * i**2 - 8 * i  ) )
-                integrals(i+n_evens,n_evens+1) = &
-                                & coeff * integrals(i-1+n_evens,n_evens+1)
-            ENDDO
+            integrals(i,i) = 1
 
-            DO i = 1, n_evens
-                DO j = 2, n_evens
-                    coeff = dble(j + i) / dble(2 + 4 * (i + j))
-                    coeff = coeff * dsqrt( dble(2 - 32 * j**2) / &
-                          &                dble( j - 2 * j**2) )
-                    integrals(i,j) = coeff * integrals(i,j-1)
-                ENDDO
-            ENDDO
+        END FORALL
 
-            DO i = 1, n_odds
-                DO j = 2, n_odds
-                    coeff = dble(2 * (i + j)) / dble(3 + 2 * (i + j))
-                    coeff = coeff * dsqrt( dble(3 + 16 * (j + j**2)) / &
-                          &                dble(16 * j**2 - 8 * j  ) )
-                    integrals(i+n_evens,j+n_evens) = &
-                                    & coeff * integrals(i+n_evens,j-1+n_evens)
-                ENDDO
-            ENDDO
+        !TESTING SECTION
+        input = 0.d0
+        
 
-        ELSE
-            WRITE (error_message,'(a)') &
-                & "Supplied domain index does not exist"
-            CALL print_warning("overlap_int_in_domain", error_message)
-        ENDIF
     END SUBROUTINE overlap_int_in_domain
 
     REAL(dp) PURE FUNCTION overlap_integral(mu, nu, id)
@@ -179,6 +144,31 @@ MODULE one_e_integrals
 
     END FUNCTION overlap_integral
 
+    REAL(dp) PURE FUNCTION outer_kinetic(i, j)
+
+        IMPLICIT NONE
+
+        INTEGER, INTENT(IN) :: i , j
+
+        IF (i == j) THEN
+            outer_kinetic = alpha ** 2 * ((dble(i * (i + 1) * &
+                            & (2 * i + 1)) / &
+                            & (dble(3 * sqrt(dble(i * (i + 1) * &
+                            & i * (i + 1)))))) - 0.5d0)
+        ELSE IF (i > j) THEN
+            outer_kinetic = alpha ** 2 * ((dble(j * (j + 1) * &
+                            & (2 * j + 1)) / &
+                            & (dble(3 * sqrt(dble(i * (i + 1) * &
+                            & j * (j + 1)))))))
+        ELSE
+            outer_kinetic = alpha ** 2 * ((dble(i * (i + 1) * &
+                            & (2 * i + 1)) / &
+                            & (dble(3 * sqrt(dble(i * (i + 1) * &
+                            & j * (j + 1)))))))
+        END IF
+
+    END FUNCTION outer_kinetic
+
     SUBROUTINE kinetic_int_in_domain(domain, integrals)
         !
         ! Computes the overlap integrals for all pairs
@@ -203,15 +193,24 @@ MODULE one_e_integrals
 
         CALL overlap_int_in_domain(domain, integrals)
 
+        !Outside left or right domains
         IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
 
-            n_exps = functions_in_domain(domain)
+            DO i = 1, functions_in_domain(domain)
+                DO j = 1, functions_in_domain(domain)
+                    integrals(i,j) = outer_kinetic(i,j)
+                END DO
+            END DO
 
-            FORALL(i = 1:n_exps, j = 1:n_exps)
-                integrals(i,j) = integrals(i,j) * &
-                               & dble(alpha * i * j)**2 / 2.d0
-            END FORALL
+            !WRITE (*,*) "Alpha = " , alpha
+            !DO i = 1, functions_in_domain(domain)
+            !DO j = 1, functions_in_domain(domain)
+            !    WRITE (*,"(F10.6)",advance='no') integrals(i,j)
+            !ENDDO
+            !WRITE (*,*)
+            !ENDDO
 
+        !Inner domains
         ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
 
             n_evens = evens_in_domain(domain)
@@ -220,17 +219,12 @@ MODULE one_e_integrals
             A = nuclear_position(domain - 1)
             B = nuclear_position(domain)
 
-            FORALL (i = 1:n_evens, j = 1:n_evens)
-                integrals(i,j) = integrals(i,j) * &
-                               & dble(4.d0 * i * j * (i + j + 0.5d0)) / &
-                               & dble((i + j)*(i + j - 1)*(A - B)**2)
-            END FORALL
+            FORALL (i = 1 : functions_in_domain(domain))
 
-            FORALL (i = 1:n_odds, j = 1:n_odds)
-                integrals(i+n_evens,j+n_evens) = &
-                               & integrals(i+n_evens,j+n_evens) * &
-                               & dble(12.d0 * i * j * (i + j + 1.5d0)) / &
-                               & dble((i + j)*(i + j - 1)*(A - B)**2)
+                integrals(i,i) = dble(0.5d0 * &
+                                 & dble(i ** 2 * PI) / &
+                                 & dble( (A-B) **2 ) )
+
             END FORALL
 
         ELSE
@@ -243,7 +237,81 @@ MODULE one_e_integrals
 
     END SUBROUTINE kinetic_int_in_domain
 
-    SUBROUTINE potential_int_in_domain(domain, overlap, integrals)
+    REAL(dp) FUNCTION middle_potential(i, j, A, B, C)
+    !Computes the one electron potential in middle domains
+        IMPLICIT NONE
+
+        INTEGER, INTENT(IN) :: i , j
+        REAL(dp), INTENT(IN) :: A , B , C
+        REAL(dp) :: S1, s2, T1, t2
+
+        S1 = ((A - C) / (B - A)) * (i + j) * PI
+        s2 = ((A - C) / (B - A)) * (i - j) * PI
+        T1 = ((B - C) / (B - A)) * (i + j) * PI
+        t2 = ((B - C) / (B - A)) * (i - j) * PI
+
+        !Debug, "Potential (1,2,2,3,-1) = "
+        !Working
+        middle_potential = ((COS(S1) * (cin(T1) - cin(S1)) - SIN(S1) &
+        & * (si(T1) - si(S1))+(1d0 - COS(S1)) * (log_im(T1) - log_im(S1))) / &
+        & (B - A)) - (((COS(s2) * (cin(t2) - cin(s2)) - SIN(s2) &
+        & * (si(t2) - si(s2))+(1d0 - COS(s2)) * (log_im(t2) - log_im(s2))) / &
+        & (B - A)))
+
+
+    END FUNCTION middle_potential
+
+    REAL(dp) FUNCTION exterior_potential_other(i, j, R)
+    !Computes the VLL expression
+    !NEEDS TO BE UPDATED
+    !If clauses and evaluation of VLL expression in both cases is very inefficient
+
+        IMPLICIT NONE
+
+        INTEGER, INTENT(IN) :: i , j
+        REAL(dp), INTENT(IN) :: R
+
+        INTEGER :: k
+        REAL(dp) :: factor
+
+        factor = ((2 * alpha * fgsl_sf_fact((i + 1)) * &
+                  & fgsl_sf_fact((j + 1))) / sqrt( dble(i*(i + 1d0)*j*(j + 1d0))))
+
+        !Top of Matrix
+        IF (i >= j) THEN
+
+            !Sum
+            DO k = 1, j
+
+                exterior_potential_other = exterior_potential_other & 
+                                           & + (factor * & 
+                                           & ((fgsl_sf_fact(i - k + j - k) * R ** (2 * k) * &
+                                           & fgsl_sf_hyperg_U_int(i + j + 1, 2 * k + 1, R)) / &
+                                           & (fgsl_sf_fact(i - k) * fgsl_sf_fact(j - k) * &
+                                           & fgsl_sf_fact(k - 1) * fgsl_sf_fact(k + 1))))
+
+            END DO
+                                
+        !Bottom Matrix
+        ELSE
+
+            !Sum
+            DO k = 1, i
+                    
+                exterior_potential_other = exterior_potential_other & 
+                                           & + (factor * & 
+                                           & ((fgsl_sf_fact(i - k + j - k) * R ** (2 * k) * &
+                                           & fgsl_sf_hyperg_U_int(i + j + 1, 2 * k + 1, R)) / &
+                                           & (fgsl_sf_fact(i - k) * fgsl_sf_fact(j - k) * &
+                                           & fgsl_sf_fact(k - 1) * fgsl_sf_fact(k + 1))))
+
+            END DO
+
+        END IF
+
+    END FUNCTION exterior_potential_other
+
+    SUBROUTINE potential_int_in_domain(domain, integrals)
         ! WARNING! Requires a minimum of 2 bfs in each finite domain
         ! WARNING! Needs error handling
         !
@@ -262,249 +330,154 @@ MODULE one_e_integrals
         ! Matrix for storing the resulting integrals
         !
         IMPLICIT NONE
+
         INTEGER,  INTENT(IN)  :: domain
-        REAL(dp), INTENT(IN)  :: overlap(:,:)
         REAL(dp), INTENT(OUT) :: integrals(:,:)
 
         INTEGER  :: i, j, k, X, Z
-        INTEGER  :: n_exps, n_evens, n_odds
-        INTEGER  :: dom_nuc, other_nuc, s
-        REAL(dp) :: A, R, arg, F0, F1, F2, c1, c2
+        INTEGER  :: dom_nuc, other_nuc, left_nuc, right_nuc
+        REAL(dp) :: A, B, R
         CHARACTER(LEN=58) :: error_message
 
+        !WRITE (*,*) "Middle Potential (1,2,2,3,-1) = " , middle_potential(1,2,2d0,3d0,-1d0)
+        !WRITE (*,*) "Exterior Potential Other (4,6,-2,alpha,1) = " , &
+        !            & exterior_potential_other(4,6,2d0 * alpha * (1d0 + 2d0))
+
+        !Do I have to initializa the integral matrix?
+
+        !Exterior Domains
         IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
 
-            n_exps = functions_in_domain(domain)
+            !Adjacent Nuclei \[Zeta] = 0 Case
 
-            ! Check if the system is an atom
-            IF (n_nuclei.EQ.1) THEN
-                Z = nuclear_charge(1)
-                FORALL (i=1:n_exps, j=1:n_exps)
-                    integrals(i,j) = overlap(i,j) * Z * &
-                        & dble(i**2 + j**2) * alpha / 2.d0
-                END FORALL
-
-            ELSE
-
+                !Distinguis between Left or Right Exeterior Case
+                
+                !Left Case
                 IF (domain.EQ.1) THEN
                     dom_nuc = 1
                     other_nuc = n_nuclei
+                !Right Case
                 ELSE
                     dom_nuc = n_nuclei
                     other_nuc = 1
                 ENDIF
 
-                ! Find the interaction with the outermost nuclei
+                    WRITE(*,*) "Alpha = " , alpha
+                    WRITE(*,*) "Functions = " , functions_in_domain
+                    WRITE(*,*) "Other Nuc = " , other_nuc
+                    WRITE(*,*) "Dom Nuc = " , dom_nuc
+
+                !Calculate potential of adjacent nucleus
                 Z = nuclear_charge(dom_nuc)
-                FORALL (i=1:n_exps, j=1:n_exps)
-                    integrals(i,j) = Z * alpha * dble(i**2 + j**2) / 2.d0
+               
+                !Top of Matrix
+                FORALL (i=1:functions_in_domain(domain), &
+                    & j=1:functions_in_domain(domain), i >= j)
+                    
+                    integrals(i,j) = integrals(i,j) + (alpha * j * (j + 1d0)) / &
+                    & sqrt(i * (i + 1d0) * j * (j + 1d0))
+
                 END FORALL
 
+                !Bottom of Matrix
+                FORALL (i=1:functions_in_domain(domain), &
+                    & j=1:functions_in_domain(domain), j > i)
+                   
+                    integrals(i,j) = integrals(i,j) + (alpha * i * (i + 1d0)) / &
+                    & sqrt(i * (i + 1d0) * j * (j + 1d0))
+
+                END FORALL
+
+                WRITE (*,*) "PASSED ADJACENT"
+
+                !Calculate potential of all other nuclei
                 Z = nuclear_charge(other_nuc)
-                R = nuclear_position(n_nuclei) - nuclear_position(1) 
-                DO i = 1, n_exps
-                DO j = 1, n_exps
-                    integrals(i,j) = integrals(i,j) + &
-                        & Z * R**2 * (alpha * dble(i**2 + j**2))**3 * &
-                        & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
-                ENDDO
-                ENDDO
+                !Differentiate different sign for left and right case
+                !Left Case
+                IF (domain.EQ.1) THEN
 
-                ! Find the interaction with the interior nuclei
-                DO X = 2, n_nuclei - 1
-                    Z = nuclear_charge(X)
-                    R = abs(nuclear_position(X) - nuclear_position(dom_nuc))
+                    WRITE(*,*) "Left Exterior"
+                    WRITE(*,*) "other_nuc = " , other_nuc
+                    WRITE(*,*) "dom_nuc = " , dom_nuc
+                    
+                    !Iterate over nuclei from the right
+                    !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
+                    DO k = other_nuc, dom_nuc + 1, -1 
 
-                    DO i = 1, n_exps
-                    DO j = 1, n_exps
-                        integrals(i,j) = integrals(i,j) + &
-                            & Z * R**2 * (alpha * dble(i**2 + j**2))**3 * &
-                            & exp_incomplete_gamma(-2, R * alpha * dble(i**2 + j**2))
-                    ENDDO
-                    ENDDO
-                END DO
+                        WRITE(*,*) "Left Exterior Iterator"
 
-                ! Multiply by the overlap
-                FORALL (i=1:n_exps, j=1:n_exps)
-                    integrals(i,j) = overlap(i,j) * integrals(i,j)
-                END FORALL
+                        !Set new nuclei position argument
+                        R = 2d0 * alpha * (nuclear_position(other_nuc) - nuclear_position(dom_nuc))
+                        
+                        DO i = 1 , functions_in_domain(domain)
+                            DO j = 1 , functions_in_domain(domain)
+                                integrals(i,j) = integrals(i,j) + exterior_potential_other(i,j,R)
+                            END DO
+                        END DO
 
-            ENDIF
+                    END DO
 
-        ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
-
-            n_evens = evens_in_domain(domain)
-            n_odds  = odds_in_domain(domain)
-
-            A = (nuclear_position(domain) - &
-              &  nuclear_position(domain - 1)) / 2.d0
-
-            ! Nuclei adjacent to the domain
-            Z = nuclear_charge(domain - 1) + nuclear_charge(domain)
-            ! Evens
-            FORALL (i=1:n_evens, j=1:n_evens)
-                integrals(i,j) = Z * (1.d0 + 1.d0 / dble(2 * (i + j))) / A
-            END FORALL
-
-            ! Odds
-            FORALL (i=1:n_odds, j=1:n_odds)
-                integrals(i + n_evens,j + n_evens) = &
-                                & Z * (1.d0 + 3.d0 / dble(2 * (i + j))) / A
-            END FORALL
-
-            ! Even/Odds
-            Z = - nuclear_charge(domain - 1) + nuclear_charge(domain)
-            FORALL (i=1:n_evens, j=1:n_odds)
-                integrals(i, j + n_evens) = & 
-                                & Z * (1.d0 + 3.d0 / dble(2 * (i + j))) / &
-                                & dble(A * sqrt(4.d0 * i + 3.d0))
-                integrals(j + n_evens, i) = & 
-                                & Z * (1.d0 + 3.d0 / dble(2 * (i + j))) / &
-                                & dble(A * sqrt(4.d0 * i + 3.d0))
-            END FORALL
-
-            ! Other nuclei
-            DO X = 1, n_nuclei
-                IF (X.EQ.(domain - 1).OR.X.EQ.domain) CYCLE
-                IF (X.GT.domain) THEN
-                    R = nuclear_position(X) - nuclear_position(domain) + A
-                    s = 1
+                !Right Case
                 ELSE
-                    R = nuclear_position(domain-1) - nuclear_position(X) + A
-                    s = -1
-                ENDIF
-                Z = nuclear_charge(X)
-                arg = dble(A)**2 / dble(R)**2
+                    
+                    WRITE(*,*) "Right Exterior"
 
-                ! EVENS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 0.5d0, 2 * n_evens + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens, n_evens) = integrals(n_evens, n_evens) + Z * F2
+                    !Iterate over nuclei from the left
+                    !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
+                    DO k = other_nuc, dom_nuc - 1, 1 
 
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 0.5d0, 2 * n_evens + 0.5d0, &
-                   & arg) / R
-                integrals(n_evens - 1, n_evens) = &
-                                    & integrals(n_evens - 1, n_evens) + Z * F1
-                integrals(n_evens, n_evens - 1) = &
-                                    & integrals(n_evens, n_evens - 1) + Z * F1
+                        WRITE(*,*) "Right Exterior Iterator"
 
-                ! Recur backwards to find the rest
-                DO k = 2 * n_evens - 2, 2, -1
-                    c1 = dble(3 + 2 * k * (1.d0 - 2 * arg) - 5 * arg) / &
-                       & dble((2 * k + 3) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
+                        !Set new nuclei position argument
+                        R = 2d0 * alpha * (nuclear_position(dom_nuc) - nuclear_position(other_nuc))
 
-                    FORALL (i=1:n_evens, j=1:n_evens, (i + j).EQ.k)
-                        integrals(i,j) = integrals(i,j) + Z * F0
-                    END FORALL
+                        DO i = 1 , functions_in_domain(domain)
+                            DO j = 1 , functions_in_domain(domain)
+                                integrals(i,j) = integrals(i,j) + exterior_potential_other(i,j,R)
+                            END DO
+                        END DO
 
-                    F2 = F1
-                    F1 = F0
-                ENDDO
+                    END DO
 
-                ! ODDS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 1.5d0, 2 * n_odds + 2.5d0, &
-                   & arg) / R
-                integrals(n_evens+n_odds,n_evens+n_odds) = &
-                            & integrals(n_evens+n_odds,n_evens+n_odds) + Z * F2
+                END IF
 
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 1.5d0, 2 * n_odds + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens+n_odds - 1,n_evens+n_odds) = &
-                        & integrals(n_evens+n_odds - 1,n_evens+n_odds) + Z * F1
-                integrals(n_evens+n_odds,n_evens+n_odds - 1) = &
-                        & integrals(n_evens+n_odds,n_evens+n_odds - 1) + Z * F1
 
-                ! Recur backwards to find the rest
-                DO k = 2 * n_odds - 2, 2, -1
-                    c1 = dble(5 + 2 * k * (1.d0 - 2 * arg) - 7 * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 7) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
 
-                    FORALL (i=1:n_odds, j=1:n_odds, (i + j).EQ.k)
-                        integrals(n_evens+i,n_evens+j) = &
-                                    & integrals(n_evens+i,n_evens+j) + Z * F0
-                    END FORALL
+        !Interior Domains
+        ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
+            
+            !Number of Nuclei to Left/Right of specified domain NOT including adjacent
+            left_nuc = domain - 2
+            right_nuc = n_domains - domain - 1
 
-                    F2 = F1
-                    F1 = F0
-                ENDDO
+            !Adjacent Case
+            !Set Adjacent Nuclei Positions
+            A = nuclear_position(domain - 1)
+            B = nuclear_position(domain)
 
-                ! EVEN/ODDS
-                ! Bottom right corner
-                F2 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 2.5d0, &
-                   & arg) / R
-                integrals(n_evens,n_evens+n_odds) = &
-                        & integrals(n_evens,n_evens+n_odds) + &
-                        & s * Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds,n_evens) = &
-                        & integrals(n_evens+n_odds,n_evens) + &
-                        & s * Z * F2 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
+            DO i = 1, functions_in_domain(domain)
+                DO j = 1, functions_in_domain(domain)
 
-                ! Next to the bottom right corner
-                F1 = two_f_one(1.d0, 1.5d0, n_evens + n_odds + 1.5d0, &
-                   & arg) / R
-                integrals(n_evens - 1,n_evens+n_odds) = &
-                        & integrals(n_evens - 1,n_evens+n_odds) + &
-                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
-                integrals(n_evens,n_evens+n_odds - 1) = &
-                        & integrals(n_evens,n_evens+n_odds - 1) + &
-                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds - 1,n_evens) = &
-                        & integrals(n_evens+n_odds - 1,n_evens) + &
-                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens + 3.d0))
-                integrals(n_evens+n_odds,n_evens - 1) = &
-                        & integrals(n_evens+n_odds,n_evens - 1) + &
-                        & s * Z * F1 * A / dble(R * sqrt(4.d0 * n_evens - 1.d0))
+                
+                    integrals(i,j) = (cin(PI * (i + j)) - cin(PI * (i - j))) &
+                                   & / (B - A)
+                
+                END DO
+            END DO
 
-                ! Recur backwards to find the rest
-                DO k = n_evens + n_odds - 2, 2, -1
-                    c1 = dble(5 + 2 * k * (1.d0 - 2 * arg) - 7 * arg) / &
-                       & dble((2 * k + 5) * (1.d0 - arg))
-                    c2 = dble(2.d0 * (k + 2.d0) * arg) / &
-                       & dble((2 * k + 7) * (1.d0 - arg))
-                    F0 = c1 * F1 + c2 * F2
+            !Leftward Case
+            DO k = left_nuc, 1, -1
+                WRITE(*,*) "Left Interior"
+                integrals(i,j) = integrals(i,j) + &
+                               & middle_potential(i,j,A,B,nuclear_position(k))
+            END DO
 
-                    FORALL (i=1:n_evens, j=1:n_odds, (i + j).EQ.k)
-                        integrals(i,n_evens+j) = integrals(i,n_evens+j) + &
-                            & s * Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
-                        integrals(n_evens+j,i) = integrals(n_evens+j,i) + &
-                            & s * Z * F0 * A / dble(R * sqrt(4.d0 * i + 3.d0))
-                    END FORALL
-
-                    F2 = F1
-                    F1 = F0
-                ENDDO
-            ENDDO
-
-            ! Multiply by the overlap
-            FORALL (i=1:n_evens, j=1:n_evens)
-                integrals(i,j) = integrals(i,j) * overlap(i,j)
-            END FORALL
-
-            FORALL (i=1:n_odds, j=1:n_odds)
-                integrals(i + n_evens, j + n_evens) = &
-                                    & integrals(i + n_evens, j + n_evens) * &
-                                    &  overlap(i + n_evens, j + n_evens)
-            END FORALL
-
-            ! NOTE : There must be a way to use the more
-            ! intensive overlap calculation less...
-
-            FORALL (i=1:n_evens, j=1:n_odds)
-                integrals(i, j + n_evens) = integrals(i, j + n_evens) * &
-                                        & overlap_integral(i, j, 2)
-                integrals(j + n_evens, i) = integrals(j + n_evens, i) * &
-                                        & overlap_integral(i, j, 2)
-            END FORALL
+            !Rightward Case
+            DO k = right_nuc, n_nuclei, 1
+                WRITE(*,*) "Right Interior"
+                integrals(i,j) = integrals(i,j) + &
+                               & middle_potential(i,j,A,B,nuclear_position(k))
+            END DO
 
         ELSE
             WRITE (error_message,'(a)') &

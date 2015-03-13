@@ -60,7 +60,7 @@ MODULE input
         !   6 = Fatal option set
         !
         IMPLICIT NONE
-
+        
         INTEGER, INTENT(IN)  :: input_channel
         INTEGER, INTENT(OUT) :: exit_state
 

@@ -6,6 +6,7 @@ MODULE special_functions
     ! purpose routines
     !
     USE constants
+    USE fgsl
 
     IMPLICIT NONE
 
@@ -13,8 +14,59 @@ MODULE special_functions
     PUBLIC :: incomplete_gamma
     PUBLIC :: exp_incomplete_gamma
     PUBLIC :: two_f_one
+    PUBLIC :: cin
+    PUBLIC :: si
+    PUBLIC :: log_im
 
     CONTAINS
+
+        REAL(dp) PURE FUNCTION log_im(x)
+        !Useful for when taking difference of two negative logs
+
+        IMPLICIT NONE
+
+        REAL(dp), INTENT(IN) :: x
+
+        IF(x < 0) THEN
+
+            log_im = LOG(-x)
+
+        ELSE
+
+            log_im = LOG(x)
+
+        END IF
+
+        END FUNCTION log_im
+
+        REAL(dp) FUNCTION cin(x)
+            !Computes the CIN function from the fgsl Cin Integral
+            !Function. Stable for x from 10^0 - 10^-100.
+
+            IMPLICIT NONE
+
+            REAL(dp), INTENT(IN) :: x
+
+            IF (x == 0) THEN
+                cin = 0.d0
+            ELSE IF (x < 0) THEN
+                cin = LOG(-x) + EULERGAMMA - fgsl_sf_Ci(-x)
+            ELSE
+                cin = LOG(x) + EULERGAMMA - fgsl_sf_Ci(x)
+            ENDIF
+
+        END FUNCTION cin
+
+        REAL(dp) FUNCTION si(x)
+        !Computes the phase shifted si function from the fgsl 
+        !Sin Integral Function. Still to test fgsl Sin Integral Fuction stabilitu
+            IMPLICIT NONE
+
+            REAL(dp), INTENT(IN) :: x
+
+            si = fgsl_sf_Si(x) - (PI / 2d0)
+
+        END FUNCTION si
 
         REAL(dp) PURE FUNCTION incomplete_gamma(a, x)
             ! WARNING! Needs error handling

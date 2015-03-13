@@ -3,8 +3,10 @@
 FC = gfortran
 
 # Set the compiler flags that we want to use
-FASTFLAGS = -O3
-DEBUGFLAGS = -g -O0 -Wall -fcheck=all -fbacktrace
+FASTFLAGS = -O3 \
+	`pkg-config --cflags gsl` `pkg-config --cflags fgsl`
+DEBUGFLAGS = -g -O0 -Wall -fcheck=all -fbacktrace \
+	`pkg-config --cflags gsl` `pkg-config --cflags fgsl`
 
 # Set the paths we need
 MKPATH=$(abspath $(lastword $(MAKEFILE_LIST)))
@@ -27,7 +29,8 @@ LAPACK_PATH = /usr/local/lib
 endif
 
 LDFLAGS += -L$(BLAS_PATH) -L$(LAPACK_PATH) \
-	-llapack -lblas -I$(OBJDIR)
+	-llapack -lblas -I$(OBJDIR) \
+	`pkg-config --libs gsl` `pkg-config --libs fgsl`
 
 # Targets
 all: FCFLAGS=$(FASTFLAGS)
