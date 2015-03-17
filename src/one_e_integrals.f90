@@ -46,11 +46,6 @@ MODULE one_e_integrals
         REAL(dp) :: coeff
         CHARACTER(LEN=58) :: error_message
 
-        !Test Variables
-        REAL(dp) :: input
-        REAL(dp) :: result
-
-
         !Initializing the matrix to zero
         FORALL (i = 1 : functions_in_domain(domain), &
                 & j = 1 : functions_in_domain(domain))
@@ -65,9 +60,6 @@ MODULE one_e_integrals
             integrals(i,i) = 1
 
         END FORALL
-
-        !TESTING SECTION
-        input = 0.d0
         
 
     END SUBROUTINE overlap_int_in_domain
@@ -187,11 +179,15 @@ MODULE one_e_integrals
         REAL(dp), INTENT(OUT) :: integrals(:,:)
 
         INTEGER :: i, j
-        INTEGER :: n_exps, n_evens, n_odds
         REAL(dp) :: A, B
         CHARACTER(LEN=58) :: error_message
 
-        CALL overlap_int_in_domain(domain, integrals)
+        FORALL(i = 1 : functions_in_domain(domain), &
+               & j = 1 : functions_in_domain(domain))
+
+            integrals(i,j) = 0
+
+        END FORALL
 
         !Outside left or right domains
         IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
@@ -202,31 +198,20 @@ MODULE one_e_integrals
                 END DO
             END DO
 
-            !WRITE (*,*) "Alpha = " , alpha
-            !DO i = 1, functions_in_domain(domain)
-            !DO j = 1, functions_in_domain(domain)
-            !    WRITE (*,"(F10.6)",advance='no') integrals(i,j)
-            !ENDDO
-            !WRITE (*,*)
-            !ENDDO
-
         !Inner domains
         ELSE IF (domain.GT.1.AND.domain.LT.n_domains) THEN
-
-            n_evens = evens_in_domain(domain)
-            n_odds  = odds_in_domain(domain)
 
             A = nuclear_position(domain - 1)
             B = nuclear_position(domain)
 
             FORALL (i = 1 : functions_in_domain(domain))
 
-                integrals(i,i) = dble(0.5d0 * &
-                                 & dble(i ** 2 * PI) / &
-                                 & dble( (A-B) **2 ) )
+                integrals(i,i) = 0.5d0 * &
+                                 & dble(((i * PI) ** 2) / &
+                                 &  ((A-B) ** 2))
 
             END FORALL
-
+            
         ELSE
 
             WRITE (error_message,'(a)') &
@@ -234,6 +219,7 @@ MODULE one_e_integrals
             CALL print_warning("kinetic_int_in_domain", error_message)
 
         ENDIF
+
 
     END SUBROUTINE kinetic_int_in_domain
 
@@ -343,7 +329,11 @@ MODULE one_e_integrals
         !WRITE (*,*) "Exterior Potential Other (4,6,-2,alpha,1) = " , &
         !            & exterior_potential_other(4,6,2d0 * alpha * (1d0 + 2d0))
 
-        !Do I have to initializa the integral matrix?
+        !Initialize Potential Integral Matrix?
+        FORALL(i = 1 : functions_in_domain(domain), &
+              & j = 1 : functions_in_domain(domain))
+            integrals(i,j) = 0d0
+        END FORALL
 
         !Exterior Domains
         IF (domain.EQ.1.OR.domain.EQ.n_domains) THEN
@@ -364,8 +354,6 @@ MODULE one_e_integrals
 
                     WRITE(*,*) "Alpha = " , alpha
                     WRITE(*,*) "Functions = " , functions_in_domain
-                    WRITE(*,*) "Other Nuc = " , other_nuc
-                    WRITE(*,*) "Dom Nuc = " , dom_nuc
 
                 !Calculate potential of adjacent nucleus
                 Z = nuclear_charge(dom_nuc)
@@ -388,17 +376,11 @@ MODULE one_e_integrals
 
                 END FORALL
 
-                WRITE (*,*) "PASSED ADJACENT"
-
                 !Calculate potential of all other nuclei
                 Z = nuclear_charge(other_nuc)
                 !Differentiate different sign for left and right case
                 !Left Case
                 IF (domain.EQ.1) THEN
-
-                    WRITE(*,*) "Left Exterior"
-                    WRITE(*,*) "other_nuc = " , other_nuc
-                    WRITE(*,*) "dom_nuc = " , dom_nuc
                     
                     !Iterate over nuclei from the right
                     !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
@@ -419,7 +401,6 @@ MODULE one_e_integrals
                 !Right Case
                 ELSE
                     
-                    WRITE(*,*) "Right Exterior"
 
                     !Iterate over nuclei from the left
                     !WARNING NOT CERRTAIN ABOUT DO FALL THROUGH
@@ -431,8 +412,7 @@ MODULE one_e_integrals
 
                         DO i = 1 , functions_in_domain(domain)
                             DO j = 1 , functions_in_domain(domain)
-                                WRITE(*,*) "Right Exterior Iterator"
-                                integrals(i,j) = integrals(i,j) + k * exterior_potential_other(i,j,R)
+                                integrals(i,j) = integrals(i,j) + Z * exterior_potential_other(i,j,R)
                             END DO
                         END DO
 
@@ -450,31 +430,41 @@ MODULE one_e_integrals
             A = nuclear_position(domain - 1)
             B = nuclear_position(domain)
 
-            DO i = 1, functions_in_domain(domain)
-                DO j = 1, functions_in_domain(domain)
-
-                    integrals(i,j) = (cin(PI * (i + j)) - cin(PI * (i - j))) &
-                                   & / (B - A)
-                
-                END DO
-            END DO
-
             !Number of Nuclei to Left/Right of specified domain NOT including adjacent
             left_nuc = domain - 2
             right_nuc = domain + 1
 
-            !Leftward Case
+            !Adjacent Sub-Case
+            DO i = 1, functions_in_domain(domain)
+                DO j = 1, functions_in_domain(domain)
+                    Z = nuclear_charge(domain - 1)
+                    integrals(i,j) = integrals(i,j) + (Z * (cin(PI * (i + j)) &
+                                     & - cin(PI * (i - j)))) / (B - A)
+
+                    Z = nuclear_charge(domain)
+                    integrals(i,j) = integrals(i,j) + (-1) ** (i + j) * ((Z * (cin(PI * (i + j)) &
+                                     & - cin(PI * (i - j)))) / (B - A))
+                
+                END DO
+            END DO
+
+            !Left Case
+            !Other Nuclei Sub-Case
             DO k = left_nuc, 1, -1
-                WRITE(*,*) "Left Interior"
-                integrals(i,j) = integrals(i,j) + &
+                WRITE(*,*) "Left Other Nuclei"
+                Z = nuclear_charge(k)
+                integrals(i,j) = integrals(i,j) + Z * &
                                & middle_potential(i,j,A,B,nuclear_position(k))
             END DO
 
-            !Rightward Case
+            !Right Case
+            !Other Nuclei Sub-Case
             DO k = right_nuc, n_nuclei, 1
-                WRITE(*,*) "Right Interior"
-                integrals(i,j) = integrals(i,j) + &
+                WRITE(*,*) "Right Other Nuclei"
+                Z = nuclear_charge(k)
+                integrals(i,j) = integrals(i,j) + (-1) ** (i + j) * Z * &
                                & middle_potential(i,j,A,B,nuclear_position(k))
+
             END DO
 
         ELSE
@@ -482,6 +472,14 @@ MODULE one_e_integrals
                 & "Supplied domain index does not exist"
             CALL print_warning("potential_int_in_domain", error_message)
         END IF
+
+        !DO i = 1, functions_in_domain(domain)
+        !    DO j = 1, functions_in_domain(domain)
+        !    WRITE(*,"(F10.6)",advance='no') integrals(i,j)
+        !    ENDDO
+        !    WRITE (*,*)
+        !ENDDO
+
     END SUBROUTINE potential_int_in_domain
 
 END MODULE one_e_integrals

@@ -275,8 +275,8 @@ MODULE hartree_fock
 
             ! Build fock matrix
             hf_two_e(d)%fock = one_e_in_domain(d)%kinetic - &
-                             & one_e_in_domain(d)%potential + &
-                             & hf_two_e(d)%g
+                             & one_e_in_domain(d)%potential !+ &
+!                            & hf_two_e(d)%g
 
             IF (debug) THEN
                 floop: DO i = 1, functions_in_domain(d)
